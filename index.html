@@ -347,6 +347,7 @@
     .stat-value{font-size:18px;}
 
     .box-grid{grid-template-columns:repeat(2, 1fr); gap:9px;}
+    .clip-grid{grid-template-columns:repeat(2, 1fr); gap:8px;}
     .box-name{font-size:11.5px; padding:0 8px 8px;}
     .box-meta{padding:7px 8px; font-size:9.5px;}
     .box-rate{font-size:12px;}
@@ -450,6 +451,27 @@
   }
   .entry-edit-input:focus{outline:none; border-bottom-color:var(--gold);}
   .entry-edit-input::placeholder{color:var(--muted);}
+
+  .clip-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px;
+  }
+  .clip-card{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .clip-card.clip-done{opacity:0.5;}
+  .clip-img{width:100%; aspect-ratio:4/3; object-fit:cover; cursor:pointer; display:block; background:#000;}
+  .clip-noimg{
+    width:100%; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center;
+    font-size:26px; background:var(--surface); cursor:pointer; color:var(--muted);
+  }
+  .clip-body{padding:8px 9px; flex:1;}
+  .clip-url{display:block; color:var(--gold); font-size:10.5px; word-break:break-all; text-decoration:none; margin-bottom:4px;}
+  .clip-url:hover{text-decoration:underline;}
+  .clip-memo{font-size:11.5px; color:var(--text); margin-bottom:4px; line-height:1.4; word-break:break-word;}
+  .clip-date{font-size:9.5px; color:var(--muted); font-family:var(--mono);}
+  .clip-actions{display:flex; gap:6px; padding:0 9px 9px; flex-wrap:wrap;}
+  .clip-actions .mini-btn{font-size:9.5px; padding:5px 8px;}
 
   .shop-stats-list{display:flex; flex-direction:column; gap:8px;}
   .shop-stat-row{
@@ -665,7 +687,7 @@ const SUGGESTED_BOX_NAMES = {
   ]
 };
 
-let data = { boxes: [], entries: [], upcoming: [], shopMeta: {} };
+let data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
 let pendingConfirmAction = null;
 
 function showConfirm(message, onYes){
@@ -842,6 +864,7 @@ function importData(event){
 let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all' };
 let newBoxImageFile = null;
 let pendingThumbBoxId = null;
+let pendingClipImage = null;
 
 function resizeImageFile(file, maxSize=440, quality=0.82){
   return new Promise((resolve, reject)=>{
@@ -868,12 +891,13 @@ function resizeImageFile(file, maxSize=440, quality=0.82){
 async function load(){
   try{
     const res = await window.storage.get(STORAGE_KEY, false);
-    data = res && res.value ? JSON.parse(res.value) : { boxes: [], entries: [], upcoming: [], shopMeta: {} };
+    data = res && res.value ? JSON.parse(res.value) : { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
   }catch(e){
-    data = { boxes: [], entries: [], upcoming: [], shopMeta: {} };
+    data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
   }
   if(!data.upcoming) data.upcoming = [];
   if(!data.shopMeta) data.shopMeta = {};
+  if(!data.clips) data.clips = [];
   // 種別(抽選/通常購入)が未設定の既存データは、これまで通り「抽選」として明示的に埋めておく
   // また、時刻対応前の「日付のみ」データは datetime-local 欄に表示されるよう T00:00 を補って移行する（時刻は仮値。あとで調整可）
   let migrated = false;
@@ -1118,6 +1142,114 @@ async function loadAiImage(file){
   }catch(err){
     showMessage('画像の読み込みに失敗しました');
   }
+}
+
+// ===== 画像・URLメモ（クリップ）機能 =====
+// 抽選ページのスクショやXの投稿URLなど、まだBOX登録するか決めていない・忘れそうなものを
+// カテゴリごとにゆるく保存しておくための機能。
+
+function onClipFileChange(){
+  const input = document.getElementById('clipImageFile');
+  const file = input.files[0];
+  input.value = '';
+  if(!file) return;
+  loadClipImage(file);
+}
+
+function handleClipImagePaste(e){
+  const imageFile = extractImageFromClipboard(e);
+  e.preventDefault();
+  e.stopPropagation();
+  e.target.textContent = '📋 右クリックで貼り付け';
+  if(!imageFile) return;
+  loadClipImage(imageFile);
+}
+
+async function loadClipImage(file){
+  try{
+    pendingClipImage = await resizeImageFile(file, 900, 0.82);
+    const label = document.getElementById('clipImageLabel');
+    if(label){ label.textContent = '🖼 画像読込済み'; label.classList.add('has-file'); }
+  }catch(err){
+    showMessage('画像の読み込みに失敗しました');
+  }
+}
+
+function clearClipImage(){
+  pendingClipImage = null;
+  const label = document.getElementById('clipImageLabel');
+  if(label){ label.textContent = '🖼 画像を選択'; label.classList.remove('has-file'); }
+}
+
+function addClip(){
+  const url = document.getElementById('clipUrl').value.trim();
+  const memo = document.getElementById('clipMemo').value.trim();
+  if(!pendingClipImage && !url && !memo){
+    showMessage('画像・URL・メモのいずれかを入力してください');
+    return;
+  }
+  data.clips.push({
+    id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+    category: state.category,
+    image: pendingClipImage || null,
+    url, memo, done: false,
+    createdAt: new Date().toISOString()
+  });
+  pendingClipImage = null;
+  document.getElementById('clipUrl').value = '';
+  document.getElementById('clipMemo').value = '';
+  save();
+  render();
+}
+
+function toggleClipDone(id){
+  const c = data.clips.find(x=>x.id===id);
+  if(!c) return;
+  c.done = !c.done;
+  save();
+  render();
+}
+
+function removeClip(id){
+  data.clips = data.clips.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function openClipImage(id){
+  const c = data.clips.find(x=>x.id===id);
+  if(!c || !c.image) return;
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="breakdown-box" style="align-items:center; max-width:520px;">
+        <img src="${c.image}" style="max-width:100%; max-height:65vh; border-radius:10px; margin-bottom:12px; display:block;">
+        ${c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" style="color:var(--gold); font-size:12px; margin-bottom:6px; word-break:break-all;">${escapeHtml(c.url)} ↗</a>` : ''}
+        ${c.memo ? `<div style="font-size:12.5px; color:var(--text); margin-bottom:12px; align-self:flex-start;">${escapeHtml(c.memo)}</div>` : ''}
+        <button type="button" class="btn-ghost breakdown-close" onclick="closeConfirm()">閉じる</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderClipGrid(){
+  const clips = data.clips.filter(c=>c.category===state.category).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  if(clips.length===0) return '<div class="empty" style="padding:20px; margin-top:14px;">まだ保存されたメモはありません。</div>';
+  return `<div class="clip-grid" style="margin-top:14px;">` + clips.map(c=>`
+    <div class="clip-card ${c.done?'clip-done':''}">
+      ${c.image
+        ? `<img src="${c.image}" class="clip-img" onclick="openClipImage('${c.id}')" alt="">`
+        : `<div class="clip-noimg" onclick="${c.url ? `window.open('${escapeHtml(c.url)}','_blank')` : ''}">📝</div>`}
+      <div class="clip-body">
+        ${c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" class="clip-url">${escapeHtml(c.url)} ↗</a>` : ''}
+        ${c.memo ? `<div class="clip-memo">${escapeHtml(c.memo)}</div>` : ''}
+        <div class="clip-date">${fmtDateTime((c.createdAt||'').slice(0,16))}</div>
+      </div>
+      <div class="clip-actions">
+        <button class="mini-btn" onclick="toggleClipDone('${c.id}')">${c.done?'未処理に戻す':'処理済みにする'}</button>
+        <button class="mini-btn del-btn" onclick="removeClip('${c.id}')">削除</button>
+      </div>
+    </div>
+  `).join('') + `</div>`;
 }
 
 async function aiFillFromImage(){
@@ -2107,6 +2239,26 @@ function renderBoxesView(){
         <button class="btn-ghost" onclick="clearUpcomingForm()">結果をクリア</button>
       </div>
       ${renderUpcomingListHtml()}
+    </div>
+
+    <div class="panel clip-panel">
+      <h2>📌 画像・URLメモ</h2>
+      <div class="add-box-hint" style="margin-top:-6px; margin-bottom:12px;">抽選ページのスクショやXの投稿URLなど、忘れそうなものをカテゴリごとに保存しておけます。BOXへの登録は不要です。</div>
+      <div class="add-box-row">
+        <label class="file-btn" id="clipImageLabel" for="clipImageFile" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択</label>
+        <input id="clipImageFile" type="file" accept="image/*" style="display:none" onchange="onClipFileChange()">
+        <span class="file-btn" contenteditable="true" tabindex="-1" spellcheck="false"
+          onpaste="handleClipImagePaste(event)"
+          onkeydown="if(!(event.ctrlKey||event.metaKey)) event.preventDefault();"
+          oninput="event.target.textContent='';"
+          title="ここを右クリック→貼り付け、またはCtrl+Vで画像を貼り付けられます">📋 右クリックで貼り付け</span>
+        <input id="clipUrl" type="text" placeholder="URL（任意・Xの投稿など）" style="flex:1; min-width:180px;">
+      </div>
+      <div class="add-box-row" style="margin-top:8px;">
+        <input id="clipMemo" type="text" placeholder="メモ（任意）" style="flex:1;">
+        <button class="btn-primary" onclick="addClip()">保存する</button>
+      </div>
+      ${renderClipGrid()}
     </div>
 
     <div class="panel">
