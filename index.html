@@ -2612,7 +2612,20 @@ load();
 // PWA：Service Workerを登録（sw.jsが同じ場所に無い/使えない環境では何もしない）
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('sw.js').catch(()=>{ /* Claudeのアーティファクト内など、sw.jsが無い環境では何もしない */ });
+    navigator.serviceWorker.register('sw.js').then((reg)=>{
+      // 新しいsw.jsが見つかったら、自動で最新版に切り替えてリロードする
+      reg.addEventListener('updatefound', ()=>{
+        const newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener('statechange', ()=>{
+          if(newWorker.state === 'activated'){
+            window.location.reload();
+          }
+        });
+      });
+      // ページを開くたびに、新しいsw.jsが無いか確認しにいく
+      reg.update();
+    }).catch(()=>{ /* Claudeのアーティファクト内など、sw.jsが無い環境では何もしない */ });
   });
 }
 </script>

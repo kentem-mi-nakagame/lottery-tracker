@@ -1,0 +1,11 @@
+# sw.js と index.html は常に最新を取りに行かせる（キャッシュさせない）
+# これが無いと、ブラウザがsw.js自体を古いまま使い続けてしまい、
+# アプリの更新がずっと反映されない原因になる。
+/sw.js
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/
+  Cache-Control: no-cache, no-store, must-revalidate
