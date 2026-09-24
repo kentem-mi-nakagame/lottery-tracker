@@ -2194,6 +2194,7 @@ const MAP_AREAS = {
 
 let storeMapInstance = null;
 let storeMapMarkers = {};
+let currentLocationMarker = null;
 let pendingStorePin = null; // { lat, lng } 新規追加待ちの地図クリック位置
 
 function statusColor(v){
@@ -2218,12 +2219,20 @@ function renderStoreMapView(){
       <div class="add-box-hint" style="margin-top:-6px; margin-bottom:12px;">
         コンビニ・量販店の「発売日販売」「購入制限」「再販情報」をピンで管理できます。地図をタップ（クリック）してピンを追加、既存のピンをタップすると詳細を編集できます。
       </div>
-      <div class="add-box-row" style="margin-bottom:10px;">${areaButtons}</div>
-
       <div class="add-box-row" style="margin-bottom:10px;">
-        <input id="storeSearchInput" type="text" placeholder="住所・施設名で検索（例：富士駅前 セブンイレブン）" style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); searchStoreLocation(); }">
+        ${areaButtons}
+        <span style="flex:1;"></span>
+        <button class="mini-btn" onclick="goToCurrentLocation()">📍 現在地に移動</button>
+        <button class="mini-btn" style="color:var(--win); border-color:var(--win);" onclick="addStoreAtCurrentLocation()">＋ 現在地に店舗を追加</button>
+      </div>
+
+      <div class="add-box-row" style="margin-bottom:6px;">
+        <input id="storeSearchInput" type="text" placeholder="住所・施設名で検索（例：富士駅前 セブンイレブン）" style="flex:1; min-width:180px;"
+          oninput="onStoreSearchInput()"
+          onkeydown="if(event.key==='Enter'){ event.preventDefault(); searchStoreLocation(); }">
         <button class="mini-btn" onclick="searchStoreLocation()">検索</button>
       </div>
+      <div class="add-box-hint" style="margin-top:0; margin-bottom:10px;">正確な位置が分からない場合は、住所検索より「現在地に追加」の方が確実です。</div>
       <div id="storeSearchResults"></div>
 
       <div id="storeMapEl" style="width:100%; height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:14px;"></div>
@@ -2239,6 +2248,45 @@ function renderStoreMapView(){
 function switchMapArea(key){
   state.mapArea = key;
   render();
+}
+
+function getCurrentPosition(){
+  return new Promise((resolve, reject)=>{
+    if(!navigator.geolocation){ reject(new Error('このブラウザは現在地取得に対応していません')); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos)=> resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err)=> reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+function goToCurrentLocation(){
+  showMessage('現在地を取得しています…');
+  getCurrentPosition().then(pos=>{
+    closeConfirm();
+    if(storeMapInstance){
+      storeMapInstance.setView([pos.lat, pos.lng], 18);
+      if(currentLocationMarker){ try{ storeMapInstance.removeLayer(currentLocationMarker); }catch(e){} }
+      currentLocationMarker = L.circleMarker([pos.lat, pos.lng], {
+        radius: 8, weight: 3, color:'#4a90ff', fillColor:'#4a90ff', fillOpacity: 0.5
+      }).addTo(storeMapInstance);
+    }
+  }).catch(()=>{
+    showMessage('現在地を取得できませんでした。位置情報の利用を許可しているか確認してください（Claudeのアーティファクト内では取得できません）');
+  });
+}
+
+function addStoreAtCurrentLocation(){
+  showMessage('現在地を取得しています…');
+  getCurrentPosition().then(pos=>{
+    closeConfirm();
+    pendingStorePin = { lat: pos.lat, lng: pos.lng };
+    if(storeMapInstance) storeMapInstance.setView([pos.lat, pos.lng], 18);
+    openStoreEditor(null);
+  }).catch(()=>{
+    showMessage('現在地を取得できませんでした。位置情報の利用を許可しているか確認してください（Claudeのアーティファクト内では取得できません）');
+  });
 }
 
 function initStoreMap(stores){
@@ -2408,21 +2456,36 @@ function deleteStore(id){
 }
 
 let storeSearchTimer = null;
-function searchStoreLocation(){
+function onStoreSearchInput(){
+  clearTimeout(storeSearchTimer);
+  const q = document.getElementById('storeSearchInput').value.trim();
+  if(!q){ document.getElementById('storeSearchResults').innerHTML = ''; return; }
+  storeSearchTimer = setTimeout(()=>{ searchStoreLocation(); }, 600);
+}
+
+function searchStoreLocation(fallbackUnbounded){
   const q = document.getElementById('storeSearchInput').value.trim();
   const resultsEl = document.getElementById('storeSearchResults');
   if(!q){ resultsEl.innerHTML = ''; return; }
   resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">検索中…</div>';
 
   const area = MAP_AREAS[state.mapArea];
-  const viewbox = `${area.lng-0.06},${area.lat+0.06},${area.lng+0.06},${area.lat-0.06}`;
-  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=jp&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(q)}`;
+  // 「セブンイレブン 富士」のように地名を含めなくても検索しやすいよう、末尾にエリア名を補って検索精度を上げる
+  const query = /富士|静岡|伊勢丹/.test(q) ? q : `${q} ${area.label}`;
+  const viewbox = `${area.lng-0.08},${area.lat+0.08},${area.lng+0.08},${area.lat-0.08}`;
+  const boundedParam = fallbackUnbounded ? '' : `&viewbox=${viewbox}&bounded=1`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=jp${boundedParam}&q=${encodeURIComponent(query)}`;
 
   fetch(url, { headers: { 'Accept-Language': 'ja' } })
     .then(r=>r.json())
     .then(list=>{
       if(!Array.isArray(list) || list.length===0){
-        resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">見つかりませんでした。地図を直接タップして追加することもできます。</div>';
+        if(!fallbackUnbounded){
+          // エリア内で見つからなければ、範囲を広げて（施設名だけで）もう一度探す
+          searchStoreLocation(true);
+          return;
+        }
+        resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">見つかりませんでした。「📍現在地に移動」して地図を直接タップするのが確実です。</div>';
         return;
       }
       resultsEl.innerHTML = `<div class="shop-stats-list" style="margin-bottom:12px;">` + list.map((r,i)=>`
