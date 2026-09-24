@@ -398,7 +398,7 @@
 
     .confirm-box, .breakdown-box{max-width:100%;}
     .breakdown-box{padding:16px;}
-    #storeMapEl{height:280px !important;}
+    #storeMapEl{height:min(60vh, 520px) !important; min-height:340px !important;}
 
     .crumb{margin-bottom:10px;}
   }
@@ -2302,7 +2302,7 @@ function renderStoreMapView(){
       <div class="add-box-hint" style="margin-top:0; margin-bottom:10px;">正確な位置が分からない場合は、住所検索より「現在地に追加」の方が確実です。</div>
       <div id="storeSearchResults"></div>
 
-      <div id="storeMapEl" style="width:100%; height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:14px;"></div>
+      <div id="storeMapEl" style="width:100%; height:min(65vh, 620px); min-height:420px; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:14px;"></div>
 
       <div id="storeListArea"></div>
     </div>
