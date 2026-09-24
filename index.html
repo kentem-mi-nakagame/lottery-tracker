@@ -485,6 +485,23 @@
   .entry-edit-input:focus{outline:none; border-bottom-color:var(--gold);}
   .entry-edit-input::placeholder{color:var(--muted);}
 
+  .chain-filter-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .chain-filter-chip{
+    font-family:var(--mono); font-size:10.5px; font-weight:700; padding:5px 10px; border-radius:20px;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text); cursor:pointer;
+    transition:opacity .15s, border-color .15s;
+  }
+  .chain-filter-chip:hover{border-color:var(--gold);}
+  .chain-filter-chip.off{opacity:0.4; text-decoration:line-through;}
+  .chain-filter-chip.reset{color:var(--gold); border-color:var(--gold); text-decoration:none; opacity:1;}
+
+  .store-pin-icon{
+    width:26px; height:26px; border-radius:50%; border:2px solid #0d0e1c;
+    display:flex; align-items:center; justify-content:center;
+    font-family:sans-serif; font-weight:800; font-size:11px; color:#0d0e1c;
+    box-shadow:0 1px 4px rgba(0,0,0,0.4);
+  }
+
   .clip-grid{
     display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px;
   }
@@ -920,7 +937,7 @@ function importData(event){
   reader.readAsText(file);
 }
 
-let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all', mapArea: 'fuji' };
+let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all', mapArea: 'fuji', hiddenChains: new Set() };
 let newBoxImageFile = null;
 let pendingThumbBoxId = null;
 let pendingClipImage = null;
@@ -958,9 +975,30 @@ async function load(){
   if(!data.shopMeta) data.shopMeta = {};
   if(!data.clips) data.clips = [];
   if(!data.stores) data.stores = [];
+  let migrated = false;
+  // チェーン名／支店名／登録番号(連番)を持たない旧データを移行する
+  let maxSeq = 0;
+  data.stores.forEach(s=>{
+    if(s.seq) maxSeq = Math.max(maxSeq, s.seq);
+  });
+  data.stores.forEach(s=>{
+    if(s.chain === undefined){
+      s.chain = s.name || 'その他';
+      s.branchName = s.branchName || '';
+      migrated = true;
+    }
+    if(!s.seq){
+      maxSeq += 1;
+      s.seq = maxSeq;
+      migrated = true;
+    }
+  });
+  if(typeof data.storeSeqCounter !== 'number' || data.storeSeqCounter < maxSeq){
+    data.storeSeqCounter = maxSeq;
+    migrated = true;
+  }
   // 種別(抽選/通常購入)が未設定の既存データは、これまで通り「抽選」として明示的に埋めておく
   // また、時刻対応前の「日付のみ」データは datetime-local 欄に表示されるよう T00:00 を補って移行する（時刻は仮値。あとで調整可）
-  let migrated = false;
   const toDateTimeCompat = v => (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v + 'T00:00' : v;
   data.entries.forEach(e=>{
     if(!e.type){ e.type = 'lottery'; migrated = true; }
@@ -2199,6 +2237,17 @@ let searchResultLayer = null;
 let searchResultMarkers = [];
 let pendingStorePin = null; // { lat, lng } 新規追加待ちの地図クリック位置
 
+const CHAIN_SUGGESTIONS = [
+  'セブンイレブン','ローソン','ファミリーマート','ミニストップ','セイコーマート','デイリーヤマザキ','ポプラ',
+  'イオン','イトーヨーカドー','ドン・キホーテ','ヨドバシカメラ','ビックカメラ','ヤマダデンキ','エディオン',
+  'TSUTAYA','GEO','その他'
+];
+
+function storeDisplayName(s){
+  const chain = s.chain || s.name || '（チェーン未設定）';
+  return s.branchName ? `${chain} ${s.branchName}` : chain;
+}
+
 function statusColor(v){
   return v==='yes' ? '#7ad98c' : v==='no' ? '#e5484d' : '#8a8fb0';
 }
@@ -2208,12 +2257,26 @@ function statusLabelText(v){
 
 function renderStoreMapView(){
   const stores = data.stores.filter(s=>s.area===state.mapArea);
+  const visibleStores = stores.filter(s=>!state.hiddenChains.has(s.chain || s.name));
 
   const areaButtons = Object.keys(MAP_AREAS).map(key=>{
     const active = state.mapArea === key;
     const style = active ? 'color:var(--win); border-color:var(--win); box-shadow:0 0 10px rgba(122,217,140,0.25);' : '';
     return `<button class="mini-btn" style="${style}" onclick="switchMapArea('${key}')">${MAP_AREAS[key].label}</button>`;
   }).join('');
+
+  const chainCounts = {};
+  stores.forEach(s=>{ const c = s.chain || s.name || 'その他'; chainCounts[c] = (chainCounts[c]||0)+1; });
+  const chainNames = Object.keys(chainCounts).sort((a,b)=>a.localeCompare(b,'ja'));
+  const chainFilterHtml = chainNames.length===0 ? '' : `
+    <div class="chain-filter-row">
+      ${chainNames.map(c=>{
+        const hidden = state.hiddenChains.has(c);
+        return `<button class="chain-filter-chip ${hidden?'off':''}" onclick="toggleChainFilter('${escapeHtml(c).replace(/'/g,"\\'")}')">${escapeHtml(c)} (${chainCounts[c]})</button>`;
+      }).join('')}
+      ${state.hiddenChains.size > 0 ? `<button class="chain-filter-chip reset" onclick="resetChainFilter()">すべて表示</button>` : ''}
+    </div>
+  `;
 
   const html = `
     <div class="panel">
@@ -2227,6 +2290,8 @@ function renderStoreMapView(){
         <button class="mini-btn" onclick="goToCurrentLocation()">📍 現在地に移動</button>
         <button class="mini-btn" style="color:var(--win); border-color:var(--win);" onclick="addStoreAtCurrentLocation()">＋ 現在地に店舗を追加</button>
       </div>
+
+      ${chainFilterHtml}
 
       <div class="add-box-row" style="margin-bottom:6px;">
         <input id="storeSearchInput" type="text" placeholder="住所・施設名で検索（例：富士駅前 セブンイレブン）" style="flex:1; min-width:180px;"
@@ -2243,8 +2308,19 @@ function renderStoreMapView(){
     </div>
   `;
   document.getElementById('mainArea').innerHTML = html;
-  renderStoreList(stores);
-  initStoreMap(stores);
+  renderStoreList(visibleStores);
+  initStoreMap(visibleStores);
+}
+
+function toggleChainFilter(chain){
+  if(state.hiddenChains.has(chain)) state.hiddenChains.delete(chain);
+  else state.hiddenChains.add(chain);
+  renderStoreMapView();
+}
+
+function resetChainFilter(){
+  state.hiddenChains.clear();
+  renderStoreMapView();
 }
 
 function switchMapArea(key){
@@ -2291,6 +2367,16 @@ function addStoreAtCurrentLocation(){
   });
 }
 
+function makeStoreIcon(seq, color){
+  return L.divIcon({
+    className: 'store-pin-icon-wrap',
+    html: `<div class="store-pin-icon" style="background:${color};">${seq!=null ? seq : ''}</div>`,
+    iconSize: [26,26],
+    iconAnchor: [13,13],
+    popupAnchor: [0,-13]
+  });
+}
+
 function initStoreMap(stores){
   if(typeof L === 'undefined'){
     document.getElementById('storeMapEl').innerHTML = '<div class="empty" style="height:100%; display:flex; align-items:center; justify-content:center;">地図を読み込めませんでした（オフラインの可能性があります）</div>';
@@ -2310,12 +2396,10 @@ function initStoreMap(stores){
   searchResultLayer = L.layerGroup().addTo(map);
 
   stores.forEach(s=>{
-    const marker = L.circleMarker([s.lat, s.lng], {
-      radius: 9, weight: 2, color:'#0d0e1c', fillColor: statusColor(s.releaseDay), fillOpacity: 0.9
-    }).addTo(map);
+    const marker = L.marker([s.lat, s.lng], { icon: makeStoreIcon(s.seq, statusColor(s.releaseDay)) }).addTo(map);
     marker.bindPopup(`
-      <div style="font-family:sans-serif; font-size:13px; min-width:140px;">
-        <b>${escapeHtml(s.name)}</b><br>
+      <div style="font-family:sans-serif; font-size:13px; min-width:150px;">
+        <b>#${s.seq!=null?s.seq:''} ${escapeHtml(storeDisplayName(s))}</b><br>
         発売日販売：${statusLabelText(s.releaseDay)}<br>
         購入制限：${statusLabelText(s.purchaseLimit)}<br>
         再販情報：${statusLabelText(s.restock)}<br>
@@ -2338,14 +2422,16 @@ function renderStoreList(stores){
   const area = document.getElementById('storeListArea');
   if(!area) return;
   if(stores.length===0){
-    area.innerHTML = '<div class="empty" style="padding:20px;">まだ登録された店舗がありません。地図をタップして追加してください。</div>';
+    area.innerHTML = '<div class="empty" style="padding:20px;">まだ登録された店舗がありません（フィルターで全部隠れている可能性もあります）。地図をタップして追加してください。</div>';
     return;
   }
-  const sorted = stores.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  const sorted = stores.slice().sort((a,b)=>(a.seq||0)-(b.seq||0));
   area.innerHTML = `<div class="clip-grid" style="grid-template-columns:repeat(auto-fill, minmax(200px,1fr));">` + sorted.map(s=>`
     <div class="clip-card">
       <div class="clip-body" style="padding:10px 11px;">
-        <div style="font-family:var(--display); font-weight:700; font-size:13px; margin-bottom:6px;">${escapeHtml(s.name)}</div>
+        <div style="font-family:var(--display); font-weight:700; font-size:13px; margin-bottom:6px;">
+          <span style="color:var(--muted); font-family:var(--mono); font-weight:800;">#${s.seq!=null?s.seq:''}</span> ${escapeHtml(storeDisplayName(s))}
+        </div>
         <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
           <span class="type-badge" style="background:${statusColor(s.releaseDay)}33; color:${statusColor(s.releaseDay)}; border:1px solid ${statusColor(s.releaseDay)}66;">発売日${statusLabelText(s.releaseDay)}</span>
           <span class="type-badge" style="background:${statusColor(s.purchaseLimit)}33; color:${statusColor(s.purchaseLimit)}; border:1px solid ${statusColor(s.purchaseLimit)}66;">制限${statusLabelText(s.purchaseLimit)}</span>
@@ -2384,11 +2470,18 @@ function openStoreEditor(id){
   document.getElementById('confirmArea').innerHTML = `
     <div class="confirm-overlay" onclick="if(event.target===this){ pendingStorePin=null; closeConfirm(); }">
       <div class="breakdown-box" style="max-width:420px; overflow-y:auto;">
-        <h3 class="breakdown-title">📍 ${isNew ? '店舗を追加' : '店舗を編集'}</h3>
+        <h3 class="breakdown-title">📍 ${isNew ? '店舗を追加' : '店舗を編集'}${!isNew && s.seq!=null ? ` <span style="color:var(--muted); font-family:var(--mono); font-size:11px;">#${s.seq}</span>` : ''}</h3>
         <div class="form-grid" style="grid-template-columns:1fr; gap:10px; margin-bottom:14px;">
           <div>
-            <label>店舗名</label>
-            <input id="storeEditName" type="text" placeholder="例：セブンイレブン 富士駅前店" value="${s ? escapeHtml(s.name) : ''}">
+            <label>チェーン名（大分類）</label>
+            <input id="storeEditChain" type="text" list="chainSuggestList" placeholder="例：セブンイレブン" value="${s ? escapeHtml(s.chain || s.name || '') : ''}">
+            <datalist id="chainSuggestList">
+              ${CHAIN_SUGGESTIONS.map(c=>`<option value="${escapeHtml(c)}">`).join('')}
+            </datalist>
+          </div>
+          <div>
+            <label>支店名（任意）</label>
+            <input id="storeEditBranch" type="text" placeholder="例：富士駅前店" value="${s ? escapeHtml(s.branchName || '') : ''}">
           </div>
           <div>
             <label>発売日に販売あるか</label>
@@ -2422,12 +2515,13 @@ function openStoreEditor(id){
 }
 
 function saveStoreEditor(id, lat, lng){
-  const name = document.getElementById('storeEditName').value.trim();
-  if(!name){ showMessage('店舗名を入力してください'); return; }
+  const chain = document.getElementById('storeEditChain').value.trim();
+  const branchName = document.getElementById('storeEditBranch').value.trim();
+  if(!chain){ showMessage('チェーン名を入力してください'); return; }
   if(lat==null || lng==null || isNaN(lat) || isNaN(lng)){ showMessage('位置情報が取得できていません。地図をタップし直してください'); return; }
 
   const payload = {
-    name,
+    chain, branchName,
     releaseDay: document.getElementById('storeEditReleaseDay').value,
     purchaseLimit: document.getElementById('storeEditLimit').value,
     limitDetail: document.getElementById('storeEditLimitDetail').value.trim(),
@@ -2441,9 +2535,10 @@ function saveStoreEditor(id, lat, lng){
     const s = data.stores.find(x=>x.id===id);
     if(s) Object.assign(s, payload);
   }else{
+    data.storeSeqCounter = (data.storeSeqCounter || 0) + 1;
     data.stores.push({
       id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
-      area: state.mapArea, lat, lng, ...payload
+      area: state.mapArea, lat, lng, seq: data.storeSeqCounter, ...payload
     });
   }
   pendingStorePin = null;
@@ -2573,6 +2668,16 @@ function renderStoreSearchResults(results, isAddressSearch){
   }
 }
 
+function splitChainAndBranch(fullName){
+  for(const chain of CHAIN_SUGGESTIONS){
+    if(chain === 'その他') continue;
+    if(fullName.indexOf(chain) === 0){
+      return { chain, branchName: fullName.slice(chain.length).trim() };
+    }
+  }
+  return { chain: fullName, branchName: '' };
+}
+
 function selectSearchResult(lat, lng, name){
   document.getElementById('storeSearchResults').innerHTML = '';
   document.getElementById('storeSearchInput').value = '';
@@ -2581,8 +2686,13 @@ function selectSearchResult(lat, lng, name){
   pendingStorePin = { lat, lng };
   openStoreEditor(null);
   setTimeout(()=>{
-    const input = document.getElementById('storeEditName');
-    if(input && !input.value) input.value = name;
+    const chainInput = document.getElementById('storeEditChain');
+    const branchInput = document.getElementById('storeEditBranch');
+    if(chainInput && !chainInput.value){
+      const { chain, branchName } = splitChainAndBranch(name);
+      chainInput.value = chain;
+      if(branchInput && !branchInput.value) branchInput.value = branchName;
+    }
   }, 0);
 }
 
