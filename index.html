@@ -2195,6 +2195,8 @@ const MAP_AREAS = {
 let storeMapInstance = null;
 let storeMapMarkers = {};
 let currentLocationMarker = null;
+let searchResultLayer = null;
+let searchResultMarkers = [];
 let pendingStorePin = null; // { lat, lng } 新規追加待ちの地図クリック位置
 
 function statusColor(v){
@@ -2296,6 +2298,7 @@ function initStoreMap(stores){
   }
   try{ if(storeMapInstance){ storeMapInstance.remove(); storeMapInstance = null; } }catch(e){}
   storeMapMarkers = {};
+  searchResultMarkers = [];
 
   const area = MAP_AREAS[state.mapArea];
   const map = L.map('storeMapEl').setView([area.lat, area.lng], area.zoom);
@@ -2303,6 +2306,8 @@ function initStoreMap(stores){
     maxZoom: 19,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map);
+
+  searchResultLayer = L.layerGroup().addTo(map);
 
   stores.forEach(s=>{
     const marker = L.circleMarker([s.lat, s.lng], {
@@ -2463,48 +2468,115 @@ function onStoreSearchInput(){
   storeSearchTimer = setTimeout(()=>{ searchStoreLocation(); }, 600);
 }
 
-function searchStoreLocation(fallbackUnbounded){
+function clearSearchResultMarkers(){
+  searchResultMarkers = [];
+  if(searchResultLayer) searchResultLayer.clearLayers();
+}
+
+function searchStoreLocation(){
   const q = document.getElementById('storeSearchInput').value.trim();
   const resultsEl = document.getElementById('storeSearchResults');
+  clearSearchResultMarkers();
   if(!q){ resultsEl.innerHTML = ''; return; }
   resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">検索中…</div>';
 
   const area = MAP_AREAS[state.mapArea];
-  // 「セブンイレブン 富士」のように地名を含めなくても検索しやすいよう、末尾にエリア名を補って検索精度を上げる
+  const pad = 0.09;
+  const south = area.lat - pad, north = area.lat + pad, west = area.lng - pad, east = area.lng + pad;
+  const safeQ = q.replace(/[[\](){}.*+?^$|\\]/g, '\\$&'); // Overpassの正規表現用にエスケープ
+
+  const overpassQuery = `[out:json][timeout:15];(node["shop"]["name"~"${safeQ}",i](${south},${west},${north},${east});node["amenity"]["name"~"${safeQ}",i](${south},${west},${north},${east});way["shop"]["name"~"${safeQ}",i](${south},${west},${north},${east}););out center 30;`;
+
+  fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(overpassQuery)
+  })
+    .then(r=>r.json())
+    .then(data=>{
+      const elements = (data && data.elements) || [];
+      const results = elements.map(el=>{
+        const lat = el.lat!=null ? el.lat : (el.center ? el.center.lat : null);
+        const lng = el.lon!=null ? el.lon : (el.center ? el.center.lon : null);
+        const name = (el.tags && el.tags.name) || q;
+        const detail = el.tags ? [el.tags['addr:city'], el.tags['addr:street'], el.tags['addr:housenumber']].filter(Boolean).join(' ') : '';
+        return { lat, lng, name, detail };
+      }).filter(r=> r.lat!=null && r.lng!=null);
+
+      if(results.length > 0){
+        renderStoreSearchResults(results, false);
+      }else{
+        // 地図データで見つからなければ、住所・施設名としてNominatimで検索
+        searchViaNominatim(q, area, false);
+      }
+    })
+    .catch(()=>{
+      // Overpassが混雑等で失敗した場合もNominatimにフォールバック
+      searchViaNominatim(q, area, false);
+    });
+}
+
+function searchViaNominatim(q, area, unbounded){
+  const resultsEl = document.getElementById('storeSearchResults');
   const query = /富士|静岡|伊勢丹/.test(q) ? q : `${q} ${area.label}`;
   const viewbox = `${area.lng-0.08},${area.lat+0.08},${area.lng+0.08},${area.lat-0.08}`;
-  const boundedParam = fallbackUnbounded ? '' : `&viewbox=${viewbox}&bounded=1`;
+  const boundedParam = unbounded ? '' : `&viewbox=${viewbox}&bounded=1`;
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=8&countrycodes=jp${boundedParam}&q=${encodeURIComponent(query)}`;
 
   fetch(url, { headers: { 'Accept-Language': 'ja' } })
     .then(r=>r.json())
     .then(list=>{
       if(!Array.isArray(list) || list.length===0){
-        if(!fallbackUnbounded){
-          // エリア内で見つからなければ、範囲を広げて（施設名だけで）もう一度探す
-          searchStoreLocation(true);
-          return;
-        }
+        if(!unbounded){ searchViaNominatim(q, area, true); return; }
         resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">見つかりませんでした。「📍現在地に移動」して地図を直接タップするのが確実です。</div>';
         return;
       }
-      resultsEl.innerHTML = `<div class="shop-stats-list" style="margin-bottom:12px;">` + list.map((r,i)=>`
-        <div class="shop-stat-row" style="cursor:pointer;" onclick='selectSearchResult(${r.lat}, ${r.lon}, ${JSON.stringify(r.display_name.split(',')[0])})'>
-          <div>
-            <div class="shop-stat-name" style="font-size:12px;">${escapeHtml(r.display_name.split(',')[0])}</div>
-            <div class="shop-stat-detail">${escapeHtml(r.display_name)}</div>
-          </div>
-        </div>
-      `).join('') + `</div>`;
+      const results = list.map(r=>({ lat: Number(r.lat), lng: Number(r.lon), name: r.display_name.split(',')[0], detail: r.display_name }));
+      renderStoreSearchResults(results, true);
     })
     .catch(()=>{
       resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">検索に失敗しました（通信環境をご確認ください）</div>';
     });
 }
 
+function renderStoreSearchResults(results, isAddressSearch){
+  const resultsEl = document.getElementById('storeSearchResults');
+  const hint = isAddressSearch
+    ? '住所・施設名としてヒットしました。'
+    : `地図データから ${results.length} 件見つかりました。ピンをタップするか、下の一覧から選んでください。`;
+  resultsEl.innerHTML = `<div class="add-box-hint" style="margin-top:0; margin-bottom:8px;">${hint}</div>` +
+    `<div class="shop-stats-list" style="margin-bottom:12px;">` + results.map((r,i)=>`
+      <div class="shop-stat-row" style="cursor:pointer;" onclick="selectSearchResult(${r.lat}, ${r.lng}, ${JSON.stringify(r.name).replace(/"/g,'&quot;')})">
+        <div>
+          <div class="shop-stat-name" style="font-size:12px;">${escapeHtml(r.name)}</div>
+          ${r.detail ? `<div class="shop-stat-detail">${escapeHtml(r.detail)}</div>` : ''}
+        </div>
+      </div>
+    `).join('') + `</div>`;
+
+  if(storeMapInstance && searchResultLayer){
+    const bounds = [];
+    results.forEach(r=>{
+      const marker = L.circleMarker([r.lat, r.lng], {
+        radius: 8, weight: 2, color:'#fff', fillColor:'#4a90ff', fillOpacity: 0.9
+      }).addTo(searchResultLayer);
+      marker.bindPopup(`
+        <div style="font-family:sans-serif; font-size:13px; min-width:140px;">
+          <b>${escapeHtml(r.name)}</b><br>
+          <button onclick="selectSearchResult(${r.lat}, ${r.lng}, ${JSON.stringify(r.name).replace(/"/g,'&quot;')})" style="margin-top:6px; cursor:pointer;">ここに登録する</button>
+        </div>
+      `);
+      searchResultMarkers.push(marker);
+      bounds.push([r.lat, r.lng]);
+    });
+    if(bounds.length > 1){ storeMapInstance.fitBounds(bounds, { padding:[30,30] }); }
+    else if(bounds.length === 1){ storeMapInstance.setView(bounds[0], 18); }
+  }
+}
+
 function selectSearchResult(lat, lng, name){
   document.getElementById('storeSearchResults').innerHTML = '';
   document.getElementById('storeSearchInput').value = '';
+  clearSearchResultMarkers();
   if(storeMapInstance){ storeMapInstance.setView([lat, lng], 18); }
   pendingStorePin = { lat, lng };
   openStoreEditor(null);
