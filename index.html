@@ -17,6 +17,8 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
   :root{
     --bg: #07080f;
@@ -73,6 +75,31 @@
   .backup-row{display:flex; gap:8px; margin-top:12px; padding-left:39px; flex-wrap:wrap;}
 
   .cat-tabs{display:flex; gap:8px; flex-wrap:wrap; margin:20px 0 22px;}
+
+  .quick-access-row{display:flex; gap:10px; margin-top:16px;}
+  .quick-access-row .store-map-banner{margin-top:0; flex:1;}
+
+  .store-map-banner{
+    display:flex; align-items:center; gap:10px; width:100%; margin-top:16px;
+    background:linear-gradient(135deg, rgba(122,217,140,0.14), rgba(122,217,140,0.04));
+    border:1px solid rgba(122,217,140,0.4); border-radius:14px; padding:13px 16px;
+    color:var(--text); font-size:20px; cursor:pointer; text-align:left;
+    transition:border-color .15s, transform .1s;
+  }
+  .store-map-banner:hover{border-color:var(--win); transform:translateY(-1px);}
+  .store-map-banner.active{border-color:var(--win); box-shadow:0 0 16px rgba(122,217,140,0.25);}
+  .store-map-banner span:first-of-type{
+    font-family:var(--display); font-weight:800; font-size:14.5px; color:var(--win);
+  }
+  .store-map-banner-sub{font-family:var(--display); font-weight:500; font-size:11px; color:var(--muted); margin-left:2px;}
+
+  .shop-history-banner{
+    background:linear-gradient(135deg, rgba(122,217,214,0.14), rgba(122,217,214,0.04));
+    border:1px solid rgba(122,217,214,0.4);
+  }
+  .shop-history-banner:hover{border-color:var(--holo-2);}
+  .shop-history-banner.active{border-color:var(--holo-2); box-shadow:0 0 16px rgba(122,217,214,0.25);}
+  .shop-history-banner span:first-of-type{color:var(--holo-2);}
   .cat-tab{
     font-family:var(--display); font-weight:700; font-size:13px;
     padding:9px 17px; border-radius:10px; border:1px solid var(--border);
@@ -333,6 +360,11 @@
     .subtitle{font-size:10.5px; padding-left:32px;}
     .backup-row{padding-left:0; gap:6px; margin-top:10px;}
     .backup-row .mini-btn, .backup-row label.mini-btn{font-size:10.5px; padding:6px 10px;}
+    .store-map-banner{padding:11px 13px; font-size:18px; margin-top:12px; flex-wrap:wrap;}
+    .store-map-banner span:first-of-type{font-size:13px;}
+    .store-map-banner-sub{flex-basis:100%; margin-left:30px; font-size:10px; margin-top:-4px;}
+    .quick-access-row{flex-direction:column; gap:8px; margin-top:12px;}
+    .quick-access-row .store-map-banner{margin-top:0;}
 
     .cat-tabs{
       flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
@@ -366,6 +398,7 @@
 
     .confirm-box, .breakdown-box{max-width:100%;}
     .breakdown-box{padding:16px;}
+    #storeMapEl{height:280px !important;}
 
     .crumb{margin-bottom:10px;}
   }
@@ -580,6 +613,15 @@
     </div>
   </header>
 
+  <div class="quick-access-row">
+    <button type="button" id="shopHistoryBanner" class="store-map-banner shop-history-banner" onclick="viewShopHistory()">
+      🏪 <span>店舗別履歴</span><span class="store-map-banner-sub">ショップごとの当選率・購入履歴</span>
+    </button>
+    <button type="button" id="storeMapBanner" class="store-map-banner" onclick="viewStoreMap()">
+      🗺️ <span>店舗マップ</span><span class="store-map-banner-sub">コンビニ・量販店の販売情報を地図で管理</span>
+    </button>
+  </div>
+
   <div id="upcomingArea"></div>
   <div class="cat-tabs" id="catTabs"></div>
   <div id="mainArea" class="loading">読み込み中...</div>
@@ -641,6 +683,11 @@ if(typeof window.storage === 'undefined'){
 // 「BOXを追加」の候補として使うだけなので、一覧になくても自由に手入力できます。誤りに気づいたら教えてください。
 const SUGGESTED_BOX_NAMES = {
   'ポケカ': [
+    'ハイクラスパック「VSTARユニバース」',
+    '拡張パック「スカーレットex」','拡張パック「バイオレットex」','強化拡張パック「トリプレットビート」',
+    '拡張パック「クレイバースト」','拡張パック「スノーハザード」','強化拡張パック「ポケモンカード151」',
+    '拡張パック「黒炎の支配者」','拡張パック「古代の咆哮」','拡張パック「未来の一閃」',
+    'ハイクラスパック「シャイニートレジャーex」',
     '拡張パック「サイバージャッジ」','拡張パック「ワイルドフォース」','強化拡張パック「クリムゾンヘイズ」',
     '拡張パック「変幻の仮面」','強化拡張パック「熱風のアリーナ」','強化拡張パック「楽園ドラゴーナ」',
     '拡張パック「ステラミラクル」','拡張パック「超電ブレイカー」','ハイクラスパック「テラスタルフェスex」',
@@ -654,6 +701,10 @@ const SUGGESTED_BOX_NAMES = {
     '拡張パック「30th CELEBRATION」','30th CELEBRATION カードセット'
   ],
   'ONE PIECE': [
+    'ブースターパック「ROMANCE DAWN」【OP-01】','ブースターパック「頂上決戦」【OP-02】',
+    'ブースターパック「強大な敵」【OP-03】','ブースターパック「謀略の王国」【OP-04】',
+    'ブースターパック「新時代の主役」【OP-05】','ブースターパック「双璧の覇者」【OP-06】',
+    'エクストラブースター「メモリアルコレクション」【EB-01】','ブースターパック「500年後の未来」【OP-07】',
     'ブースターパック「二つの伝説」【OP-08】','プレミアムブースター「ONE PIECE CARD THE BEST」【PRB-01】',
     'ブースターパック「新たなる皇帝」【OP-09】','ブースターパック「王族の血統」【OP-10】',
     'エクストラブースター「Anime 25th collection」【EB-02】','ブースターパック「神速の拳」【OP-11】',
@@ -672,6 +723,14 @@ const SUGGESTED_BOX_NAMES = {
     'ブースターパック「BRIGHTNESS OF HOPE」【FB11】','STORY BOOSTER 01【ST01】'
   ],
   '遊戯王': [
+    'ストラクチャーデッキR「デビルズ・ゲート」','デッキビルドパック「アメイジング・ディフェンダーズ」',
+    'WORLD PREMIERE PACK 2022','PHOTON HYPERNOVA','SELECTION 5','ストラクチャーデッキ「蟲惑魔の森」',
+    'PREMIUM PACK 2023','SECRET UTILITY BOX','CYBERSTORM ACCESS','RARITY COLLECTION -QUARTER CENTURY EDITION-',
+    'デッキビルドパック「ワイルド・サバイバーズ」','DUELIST NEXUS','デュエリストパック -爆炎のデュエリスト編-',
+    'ANIMATION CHRONICLE 2023','ストラクチャーデッキ「王者の鼓動」','AGE OF OVERLORD',
+    'デッキビルドパック「ヴァリアント・スマッシャーズ」','ストラクチャーデッキR「炎王の急襲」',
+    'WORLD PREMIERE PACK 2023','PHANTOM NIGHTMARE','TERMINAL WORLD','PREMIUM PACK 2024',
+    'QUARTER CENTURY DUELIST BOX','LEGACY OF DESTRUCTION',
     '基本パック「インフィニット・フォビドゥン」','デュエリストパック -輝光のデュエリスト編-',
     'デュエリストパック -レジェンドデュエリスト編4-','WORLD PREMIERE PACK 2024',
     'デッキビルドパック「ジャスティス・ハンターズ」','ストラクチャーデッキ「ハーピィ・レディ・シスターズ」',
@@ -687,7 +746,7 @@ const SUGGESTED_BOX_NAMES = {
   ]
 };
 
-let data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
+let data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
 let pendingConfirmAction = null;
 
 function showConfirm(message, onYes){
@@ -861,7 +920,7 @@ function importData(event){
   reader.readAsText(file);
 }
 
-let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all' };
+let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all', mapArea: 'fuji' };
 let newBoxImageFile = null;
 let pendingThumbBoxId = null;
 let pendingClipImage = null;
@@ -891,13 +950,14 @@ function resizeImageFile(file, maxSize=440, quality=0.82){
 async function load(){
   try{
     const res = await window.storage.get(STORAGE_KEY, false);
-    data = res && res.value ? JSON.parse(res.value) : { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
+    data = res && res.value ? JSON.parse(res.value) : { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
   }catch(e){
-    data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [] };
+    data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
   }
   if(!data.upcoming) data.upcoming = [];
   if(!data.shopMeta) data.shopMeta = {};
   if(!data.clips) data.clips = [];
+  if(!data.stores) data.stores = [];
   // 種別(抽選/通常購入)が未設定の既存データは、これまで通り「抽選」として明示的に埋めておく
   // また、時刻対応前の「日付のみ」データは datetime-local 欄に表示されるよう T00:00 を補って移行する（時刻は仮値。あとで調整可）
   let migrated = false;
@@ -1520,13 +1580,12 @@ function renderTabs(){
     return `<button class="cat-tab ${active?'active':''}" style="${style}" onclick="switchCategory('${escapeHtml(c)}')">${escapeHtml(c)}</button>`;
   }).join('');
 
-  const shopHistoryActive = state.view === 'shop-history';
-  const shopHistoryStyle = shopHistoryActive
-    ? `border-bottom-color:var(--holo-2); color:var(--holo-2); box-shadow:0 0 14px rgba(122,217,214,0.2);`
-    : `border-bottom-color:transparent;`;
-  const shopHistoryTab = `<button class="cat-tab ${shopHistoryActive?'active':''}" style="${shopHistoryStyle}" onclick="viewShopHistory()">🏪 店舗別履歴</button>`;
+  document.getElementById('catTabs').innerHTML = catTabsHtml;
 
-  document.getElementById('catTabs').innerHTML = catTabsHtml + shopHistoryTab;
+  const banner = document.getElementById('storeMapBanner');
+  if(banner) banner.classList.toggle('active', state.view === 'store-map');
+  const shopBanner = document.getElementById('shopHistoryBanner');
+  if(shopBanner) shopBanner.classList.toggle('active', state.view === 'shop-history');
 }
 
 function switchCategory(c){
@@ -1540,6 +1599,13 @@ function switchCategory(c){
 
 function viewShopHistory(){
   state.view = 'shop-history';
+  state.boxId = null;
+  renderTabs();
+  render();
+}
+
+function viewStoreMap(){
+  state.view = 'store-map';
   state.boxId = null;
   renderTabs();
   render();
@@ -1608,7 +1674,12 @@ function onNewBoxImageChange(){
 async function addBox(){
   const input = document.getElementById('newBoxName');
   const name = input.value.trim();
-  if(!name) return;
+  if(!name){ showMessage('BOX名を入力してください'); return; }
+
+  if(!newBoxImageFile){
+    showMessage('サムネイル画像を選択してください（あとから見返す時の目印になるため必須にしています）');
+    return;
+  }
 
   const priceInput = document.getElementById('newBoxPrice');
   const priceVal = priceInput ? priceInput.value.trim() : '';
@@ -1618,16 +1689,16 @@ async function addBox(){
   const releaseDate = releaseDateInput ? releaseDateInput.value : '';
 
   let thumbnail = null;
-  if(newBoxImageFile){
-    try{ thumbnail = await resizeImageFile(newBoxImageFile); }
-    catch(e){ showMessage('画像の読み込みに失敗しました。名前だけで登録します。'); }
-  }
+  try{ thumbnail = await resizeImageFile(newBoxImageFile); }
+  catch(e){ showMessage('画像の読み込みに失敗しました。もう一度画像を選択してください'); return; }
 
   data.boxes.push({ id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), category: state.category, name, thumbnail, price, releaseDate });
   input.value = '';
   if(priceInput) priceInput.value = '';
   if(releaseDateInput) releaseDateInput.value = '';
   newBoxImageFile = null;
+  const label = document.getElementById('newBoxImageLabel');
+  if(label){ label.textContent = '🖼 画像を選択'; label.classList.remove('has-file'); }
   save();
   render();
 }
@@ -1949,6 +2020,7 @@ function renderUpcomingPanel(){
 function render(){
   renderUpcomingPanel();
   if(state.view === 'shop-history'){ renderShopHistoryView(); }
+  else if(state.view === 'store-map'){ renderStoreMapView(); }
   else if(state.view === 'boxes'){ renderBoxesView(); }
   else { renderBoxDetailView(); }
 }
@@ -2110,6 +2182,273 @@ function renderShopHistoryView(){
   `;
 
   document.getElementById('mainArea').innerHTML = html;
+}
+
+// ===== 店舗マップ機能 =====
+// コンビニ・量販店の「発売日に売っているか」「購入制限」「再販情報」を、地図上のピンとして管理する。
+
+const MAP_AREAS = {
+  fuji: { label: '富士市', lat: 35.1622, lng: 138.6772, zoom: 14 },
+  shizuoka: { label: '静岡駅北口〜伊勢丹', lat: 34.9745, lng: 138.3900, zoom: 16 }
+};
+
+let storeMapInstance = null;
+let storeMapMarkers = {};
+let pendingStorePin = null; // { lat, lng } 新規追加待ちの地図クリック位置
+
+function statusColor(v){
+  return v==='yes' ? '#7ad98c' : v==='no' ? '#e5484d' : '#8a8fb0';
+}
+function statusLabelText(v){
+  return v==='yes' ? 'あり' : v==='no' ? 'なし' : '不明';
+}
+
+function renderStoreMapView(){
+  const stores = data.stores.filter(s=>s.area===state.mapArea);
+
+  const areaButtons = Object.keys(MAP_AREAS).map(key=>{
+    const active = state.mapArea === key;
+    const style = active ? 'color:var(--win); border-color:var(--win); box-shadow:0 0 10px rgba(122,217,140,0.25);' : '';
+    return `<button class="mini-btn" style="${style}" onclick="switchMapArea('${key}')">${MAP_AREAS[key].label}</button>`;
+  }).join('');
+
+  const html = `
+    <div class="panel">
+      <h2>🗺️ 店舗マップ</h2>
+      <div class="add-box-hint" style="margin-top:-6px; margin-bottom:12px;">
+        コンビニ・量販店の「発売日販売」「購入制限」「再販情報」をピンで管理できます。地図をタップ（クリック）してピンを追加、既存のピンをタップすると詳細を編集できます。
+      </div>
+      <div class="add-box-row" style="margin-bottom:10px;">${areaButtons}</div>
+
+      <div class="add-box-row" style="margin-bottom:10px;">
+        <input id="storeSearchInput" type="text" placeholder="住所・施設名で検索（例：富士駅前 セブンイレブン）" style="flex:1; min-width:180px;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); searchStoreLocation(); }">
+        <button class="mini-btn" onclick="searchStoreLocation()">検索</button>
+      </div>
+      <div id="storeSearchResults"></div>
+
+      <div id="storeMapEl" style="width:100%; height:360px; border-radius:12px; overflow:hidden; border:1px solid var(--border); margin-bottom:14px;"></div>
+
+      <div id="storeListArea"></div>
+    </div>
+  `;
+  document.getElementById('mainArea').innerHTML = html;
+  renderStoreList(stores);
+  initStoreMap(stores);
+}
+
+function switchMapArea(key){
+  state.mapArea = key;
+  render();
+}
+
+function initStoreMap(stores){
+  if(typeof L === 'undefined'){
+    document.getElementById('storeMapEl').innerHTML = '<div class="empty" style="height:100%; display:flex; align-items:center; justify-content:center;">地図を読み込めませんでした（オフラインの可能性があります）</div>';
+    return;
+  }
+  try{ if(storeMapInstance){ storeMapInstance.remove(); storeMapInstance = null; } }catch(e){}
+  storeMapMarkers = {};
+
+  const area = MAP_AREAS[state.mapArea];
+  const map = L.map('storeMapEl').setView([area.lat, area.lng], area.zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  stores.forEach(s=>{
+    const marker = L.circleMarker([s.lat, s.lng], {
+      radius: 9, weight: 2, color:'#0d0e1c', fillColor: statusColor(s.releaseDay), fillOpacity: 0.9
+    }).addTo(map);
+    marker.bindPopup(`
+      <div style="font-family:sans-serif; font-size:13px; min-width:140px;">
+        <b>${escapeHtml(s.name)}</b><br>
+        発売日販売：${statusLabelText(s.releaseDay)}<br>
+        購入制限：${statusLabelText(s.purchaseLimit)}<br>
+        再販情報：${statusLabelText(s.restock)}<br>
+        <button onclick="openStoreEditor('${s.id}')" style="margin-top:6px; cursor:pointer;">詳細を編集</button>
+      </div>
+    `);
+    storeMapMarkers[s.id] = marker;
+  });
+
+  map.on('click', (e)=>{
+    pendingStorePin = { lat: e.latlng.lat, lng: e.latlng.lng };
+    openStoreEditor(null);
+  });
+
+  storeMapInstance = map;
+  setTimeout(()=>{ try{ map.invalidateSize(); }catch(e){} }, 150);
+}
+
+function renderStoreList(stores){
+  const area = document.getElementById('storeListArea');
+  if(!area) return;
+  if(stores.length===0){
+    area.innerHTML = '<div class="empty" style="padding:20px;">まだ登録された店舗がありません。地図をタップして追加してください。</div>';
+    return;
+  }
+  const sorted = stores.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  area.innerHTML = `<div class="clip-grid" style="grid-template-columns:repeat(auto-fill, minmax(200px,1fr));">` + sorted.map(s=>`
+    <div class="clip-card">
+      <div class="clip-body" style="padding:10px 11px;">
+        <div style="font-family:var(--display); font-weight:700; font-size:13px; margin-bottom:6px;">${escapeHtml(s.name)}</div>
+        <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
+          <span class="type-badge" style="background:${statusColor(s.releaseDay)}33; color:${statusColor(s.releaseDay)}; border:1px solid ${statusColor(s.releaseDay)}66;">発売日${statusLabelText(s.releaseDay)}</span>
+          <span class="type-badge" style="background:${statusColor(s.purchaseLimit)}33; color:${statusColor(s.purchaseLimit)}; border:1px solid ${statusColor(s.purchaseLimit)}66;">制限${statusLabelText(s.purchaseLimit)}</span>
+          <span class="type-badge" style="background:${statusColor(s.restock)}33; color:${statusColor(s.restock)}; border:1px solid ${statusColor(s.restock)}66;">再販${statusLabelText(s.restock)}</span>
+        </div>
+        ${s.memo ? `<div class="clip-memo">${escapeHtml(s.memo)}</div>` : ''}
+      </div>
+      <div class="clip-actions">
+        <button class="mini-btn" onclick="panToStore('${s.id}')">地図で見る</button>
+        <button class="mini-btn" onclick="openStoreEditor('${s.id}')">編集</button>
+      </div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+function panToStore(id){
+  const s = data.stores.find(x=>x.id===id);
+  if(!s || !storeMapInstance) return;
+  storeMapInstance.setView([s.lat, s.lng], 17);
+  const marker = storeMapMarkers[id];
+  if(marker) marker.openPopup();
+}
+
+function openStoreEditor(id){
+  const s = id ? data.stores.find(x=>x.id===id) : null;
+  const isNew = !s;
+  const lat = s ? s.lat : (pendingStorePin ? pendingStorePin.lat : null);
+  const lng = s ? s.lng : (pendingStorePin ? pendingStorePin.lng : null);
+
+  const selectOptions = (val) => `
+    <option value="unknown" ${val==='unknown'||!val?'selected':''}>不明</option>
+    <option value="yes" ${val==='yes'?'selected':''}>あり</option>
+    <option value="no" ${val==='no'?'selected':''}>なし</option>
+  `;
+
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this){ pendingStorePin=null; closeConfirm(); }">
+      <div class="breakdown-box" style="max-width:420px; overflow-y:auto;">
+        <h3 class="breakdown-title">📍 ${isNew ? '店舗を追加' : '店舗を編集'}</h3>
+        <div class="form-grid" style="grid-template-columns:1fr; gap:10px; margin-bottom:14px;">
+          <div>
+            <label>店舗名</label>
+            <input id="storeEditName" type="text" placeholder="例：セブンイレブン 富士駅前店" value="${s ? escapeHtml(s.name) : ''}">
+          </div>
+          <div>
+            <label>発売日に販売あるか</label>
+            <select id="storeEditReleaseDay">${selectOptions(s ? s.releaseDay : 'unknown')}</select>
+          </div>
+          <div>
+            <label>購入制限</label>
+            <select id="storeEditLimit">${selectOptions(s ? s.purchaseLimit : 'unknown')}</select>
+            <input id="storeEditLimitDetail" type="text" placeholder="制限の内容（例：1人1点まで）" value="${s ? escapeHtml(s.limitDetail||'') : ''}" style="margin-top:6px;">
+          </div>
+          <div>
+            <label>再販情報</label>
+            <select id="storeEditRestock">${selectOptions(s ? s.restock : 'unknown')}</select>
+            <input id="storeEditRestockDetail" type="text" placeholder="例：9/20 再販あり" value="${s ? escapeHtml(s.restockDetail||'') : ''}" style="margin-top:6px;">
+          </div>
+          <div>
+            <label>メモ（任意）</label>
+            <input id="storeEditMemo" type="text" placeholder="レジ横に並ぶ、開店30分前から列など" value="${s ? escapeHtml(s.memo||'') : ''}">
+          </div>
+        </div>
+        <div class="confirm-actions" style="justify-content:space-between;">
+          ${!isNew ? `<button class="btn-danger" onclick="deleteStore('${s.id}')">削除する</button>` : `<span></span>`}
+          <div style="display:flex; gap:8px;">
+            <button class="btn-ghost" onclick="pendingStorePin=null; closeConfirm();">キャンセル</button>
+            <button class="btn-primary" onclick="saveStoreEditor('${isNew ? '' : s.id}', ${lat}, ${lng})">保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveStoreEditor(id, lat, lng){
+  const name = document.getElementById('storeEditName').value.trim();
+  if(!name){ showMessage('店舗名を入力してください'); return; }
+  if(lat==null || lng==null || isNaN(lat) || isNaN(lng)){ showMessage('位置情報が取得できていません。地図をタップし直してください'); return; }
+
+  const payload = {
+    name,
+    releaseDay: document.getElementById('storeEditReleaseDay').value,
+    purchaseLimit: document.getElementById('storeEditLimit').value,
+    limitDetail: document.getElementById('storeEditLimitDetail').value.trim(),
+    restock: document.getElementById('storeEditRestock').value,
+    restockDetail: document.getElementById('storeEditRestockDetail').value.trim(),
+    memo: document.getElementById('storeEditMemo').value.trim(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if(id){
+    const s = data.stores.find(x=>x.id===id);
+    if(s) Object.assign(s, payload);
+  }else{
+    data.stores.push({
+      id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      area: state.mapArea, lat, lng, ...payload
+    });
+  }
+  pendingStorePin = null;
+  save();
+  closeConfirm();
+  render();
+}
+
+function deleteStore(id){
+  data.stores = data.stores.filter(x=>x.id!==id);
+  pendingStorePin = null;
+  save();
+  closeConfirm();
+  render();
+}
+
+let storeSearchTimer = null;
+function searchStoreLocation(){
+  const q = document.getElementById('storeSearchInput').value.trim();
+  const resultsEl = document.getElementById('storeSearchResults');
+  if(!q){ resultsEl.innerHTML = ''; return; }
+  resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">検索中…</div>';
+
+  const area = MAP_AREAS[state.mapArea];
+  const viewbox = `${area.lng-0.06},${area.lat+0.06},${area.lng+0.06},${area.lat-0.06}`;
+  const url = `https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=jp&viewbox=${viewbox}&bounded=1&q=${encodeURIComponent(q)}`;
+
+  fetch(url, { headers: { 'Accept-Language': 'ja' } })
+    .then(r=>r.json())
+    .then(list=>{
+      if(!Array.isArray(list) || list.length===0){
+        resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">見つかりませんでした。地図を直接タップして追加することもできます。</div>';
+        return;
+      }
+      resultsEl.innerHTML = `<div class="shop-stats-list" style="margin-bottom:12px;">` + list.map((r,i)=>`
+        <div class="shop-stat-row" style="cursor:pointer;" onclick='selectSearchResult(${r.lat}, ${r.lon}, ${JSON.stringify(r.display_name.split(',')[0])})'>
+          <div>
+            <div class="shop-stat-name" style="font-size:12px;">${escapeHtml(r.display_name.split(',')[0])}</div>
+            <div class="shop-stat-detail">${escapeHtml(r.display_name)}</div>
+          </div>
+        </div>
+      `).join('') + `</div>`;
+    })
+    .catch(()=>{
+      resultsEl.innerHTML = '<div class="empty" style="padding:10px; margin:0 0 10px;">検索に失敗しました（通信環境をご確認ください）</div>';
+    });
+}
+
+function selectSearchResult(lat, lng, name){
+  document.getElementById('storeSearchResults').innerHTML = '';
+  document.getElementById('storeSearchInput').value = '';
+  if(storeMapInstance){ storeMapInstance.setView([lat, lng], 18); }
+  pendingStorePin = { lat, lng };
+  openStoreEditor(null);
+  setTimeout(()=>{
+    const input = document.getElementById('storeEditName');
+    if(input && !input.value) input.value = name;
+  }, 0);
 }
 
 function viewShopHistoryOpenBox(boxId){
@@ -2275,7 +2614,7 @@ function renderBoxesView(){
           <label>発売日（任意）</label>
           <input id="newBoxReleaseDate" type="date" style="max-width:150px;">
         </div>
-        <label class="file-btn" id="newBoxImageLabel" for="newBoxImage" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択</label>
+        <label class="file-btn" id="newBoxImageLabel" for="newBoxImage" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択（必須）</label>
         <input id="newBoxImage" type="file" accept="image/*" style="display:none" onchange="onNewBoxImageChange()">
         <span class="file-btn" contenteditable="true" tabindex="-1" spellcheck="false"
           onpaste="handleNewBoxPaste(event)"
@@ -2284,7 +2623,7 @@ function renderBoxesView(){
           title="ここを右クリック→貼り付け、またはCtrl+Vで画像を登録できます">📋 右クリックで貼り付け</span>
         <button class="btn-primary" onclick="addBox()">追加</button>
       </div>
-      <div class="add-box-hint">BOX名を入力すると、直近2年程度の発売実績や発売予定のBOX候補が表示されます（一覧になくても自由に入力できます）。画像・定価は任意です。ファイル選択のほか、画面をコピーして右クリック→貼り付け、またはCtrl+V(Mac: ⌘+V)でも登録できます。</div>
+      <div class="add-box-hint">BOX名を入力すると、過去の発売実績や発売予定のBOX候補が表示されます（一覧になくても自由に入力できます）。<b>サムネイル画像は必須です</b>（あとで一覧を見返す時の目印になるため）。定価・発売日は任意です。ファイル選択のほか、画面をコピーして右クリック→貼り付け、またはCtrl+V(Mac: ⌘+V)でも登録できます。</div>
     </div>
   `;
 
