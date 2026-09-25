@@ -1,0 +1,3082 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>トレカ抽選トラッカー</title>
+
+<!-- PWA対応：ホーム画面に追加した時にアプリらしく起動させるための設定 -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#07080f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="抽選トラッカー">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700;900&family=Noto+Sans+JP:wght@400;500;700&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #07080f;
+    --surface: #13152a;
+    --surface-2: #1a1d38;
+    --border: #262a4a;
+    --text: #f1eef8;
+    --muted: #868ebd;
+    --gold: #e0b95f;
+    --gold-soft: rgba(224,185,95,0.15);
+    --holo-1: #e0b95f;
+    --holo-2: #7ad9d6;
+    --holo-3: #e88fc2;
+    --win: #45dba3;
+    --win-soft: rgba(69,219,163,0.14);
+    --lose: #ef5f79;
+    --lose-soft: rgba(239,95,121,0.14);
+    --pending: #838ec4;
+    --pending-soft: rgba(131,142,196,0.14);
+    --mono: 'JetBrains Mono', monospace;
+    --display: 'Zen Kaku Gothic New', sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(ellipse 700px 380px at 12% -5%, rgba(224,185,95,0.10), transparent 55%),
+      radial-gradient(ellipse 600px 400px at 100% 0%, rgba(122,217,214,0.07), transparent 55%),
+      radial-gradient(ellipse 700px 500px at 90% 100%, rgba(232,143,194,0.06), transparent 55%),
+      var(--bg);
+    color:var(--text);
+    font-family:'Noto Sans JP', sans-serif;
+    min-height:100vh;
+    padding:30px 16px 70px;
+  }
+  .wrap{max-width:980px;margin:0 auto;}
+  header{margin-bottom:22px; position:relative;}
+  h1{
+    font-family:var(--display);
+    font-weight:900; font-size:25px; margin:0 0 4px; letter-spacing:0.01em;
+    display:flex; align-items:center; gap:9px;
+  }
+  h1 .mark{
+    display:inline-flex; align-items:center; justify-content:center; width:30px; height:30px;
+    border-radius:8px; font-size:14px; color:#100b02; flex:none;
+    background:linear-gradient(135deg, var(--holo-1), var(--holo-2) 55%, var(--holo-3));
+    box-shadow:0 0 18px rgba(224,185,95,0.35);
+  }
+  h1 .accent{
+    background:linear-gradient(100deg, var(--holo-1) 10%, var(--holo-3) 45%, var(--holo-2) 75%, var(--holo-1));
+    background-size:220% auto; -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .subtitle{color:var(--muted); font-size:12.5px; padding-left:39px;}
+  .backup-row{display:flex; gap:8px; margin-top:12px; padding-left:39px; flex-wrap:wrap;}
+
+  .cat-tabs{display:flex; gap:8px; flex-wrap:wrap; margin:20px 0 22px;}
+
+  .quick-access-row{display:flex; gap:10px; margin-top:16px;}
+  .quick-access-row .store-map-banner{margin-top:0; flex:1;}
+
+  .store-map-banner{
+    display:flex; align-items:center; gap:10px; width:100%; margin-top:16px;
+    background:linear-gradient(135deg, rgba(122,217,140,0.14), rgba(122,217,140,0.04));
+    border:1px solid rgba(122,217,140,0.4); border-radius:14px; padding:13px 16px;
+    color:var(--text); font-size:20px; cursor:pointer; text-align:left;
+    transition:border-color .15s, transform .1s;
+  }
+  .store-map-banner:hover{border-color:var(--win); transform:translateY(-1px);}
+  .store-map-banner.active{border-color:var(--win); box-shadow:0 0 16px rgba(122,217,140,0.25);}
+  .store-map-banner span:first-of-type{
+    font-family:var(--display); font-weight:800; font-size:14.5px; color:var(--win);
+  }
+  .store-map-banner-sub{font-family:var(--display); font-weight:500; font-size:11px; color:var(--muted); margin-left:2px;}
+
+  .shop-history-banner{
+    background:linear-gradient(135deg, rgba(122,217,214,0.14), rgba(122,217,214,0.04));
+    border:1px solid rgba(122,217,214,0.4);
+  }
+  .shop-history-banner:hover{border-color:var(--holo-2);}
+  .shop-history-banner.active{border-color:var(--holo-2); box-shadow:0 0 16px rgba(122,217,214,0.25);}
+  .shop-history-banner span:first-of-type{color:var(--holo-2);}
+  .cat-tab{
+    font-family:var(--display); font-weight:700; font-size:13px;
+    padding:9px 17px; border-radius:10px; border:1px solid var(--border);
+    background:var(--surface); color:var(--muted); cursor:pointer; position:relative;
+    border-bottom:2.5px solid var(--border); transition:border-color .15s, color .15s;
+  }
+  .cat-tab.active{background:var(--surface-2); color:var(--text);}
+
+  .crumb{display:flex; align-items:center; gap:8px; margin-bottom:16px; font-size:13px; color:var(--muted);}
+  .crumb button{
+    background:none; border:none; color:var(--gold); font-family:var(--display);
+    font-weight:700; cursor:pointer; padding:0; font-size:13px;
+  }
+  .crumb .sep{color:var(--border);}
+  .crumb .current{color:var(--text); font-weight:700;}
+
+  .stats-row{display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px; margin-bottom:24px;}
+  .stat-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px 16px; position:relative; overflow:hidden;
+  }
+  .stat-card::before{
+    content:""; position:absolute; top:-40%; right:-25%; width:90px;height:90px;
+    background:conic-gradient(from 90deg, var(--holo-1), transparent 30%, var(--holo-2) 55%, transparent 75%, var(--holo-3) 95%);
+    opacity:0.14; filter:blur(8px);
+  }
+  .stat-label{font-size:11px; color:var(--muted); margin-bottom:7px; letter-spacing:0.02em;}
+  .stat-value{font-family:var(--mono); font-weight:800; font-size:23px; position:relative;}
+  .stat-value.win{color:var(--win);}
+  .stat-value.gold{color:var(--gold);}
+
+  .panel{background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px; margin-bottom:22px;}
+  .panel h2{
+    font-family:var(--display); font-size:14px; margin:0 0 14px; color:var(--gold);
+    display:flex; align-items:center; gap:8px; letter-spacing:0.01em;
+  }
+  .panel h2::before{content:"◆"; font-size:9px;}
+
+  .shop-stats-panel summary{
+    font-family:var(--display); font-size:14px; color:var(--gold); cursor:pointer;
+    display:flex; align-items:center; gap:8px; letter-spacing:0.01em; list-style:none;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .shop-stats-panel summary::-webkit-details-marker{display:none;}
+  .shop-stats-panel summary::before{content:"◆"; font-size:9px;}
+  .shop-stats-panel summary::after{content:"▾"; margin-left:auto; color:var(--muted); font-size:12px; transition:transform .15s;}
+  .shop-stats-panel[open] summary::after{transform:rotate(180deg);}
+  .shop-stats-panel[open] summary{margin-bottom:14px;}
+
+  .history-list{display:flex; flex-direction:column; gap:6px;}
+  .history-row{
+    display:flex; flex-direction:column; gap:5px; padding:8px 10px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:8px; cursor:pointer; transition:border-color .15s;
+  }
+  .history-row:hover{border-color:var(--gold);}
+  .history-row-top{display:flex; align-items:center; gap:8px; min-width:0;}
+  .history-row-bottom{display:flex; align-items:center; justify-content:space-between; gap:8px;}
+  .history-cat-chip{
+    font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:10px; border:1px solid; white-space:nowrap;
+    font-family:var(--display); flex:none;
+  }
+  .history-box{font-family:var(--display); font-weight:700; font-size:12.5px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .history-date{font-family:var(--mono); font-size:11px; color:var(--muted); flex:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .form-grid{display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:10px;}
+  label{font-size:11px; color:var(--muted); display:block; margin-bottom:4px;}
+  input, select, textarea{
+    width:100%; background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    color:var(--text); padding:9px 10px; font-size:13.5px; font-family:inherit;
+  }
+  input:focus, select:focus, textarea:focus{outline:none; border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft);}
+  .full{grid-column:1/-1;}
+  .form-actions{margin-top:14px; display:flex; gap:10px;}
+  button{
+    font-family:var(--display); font-weight:700; border:none; border-radius:8px;
+    padding:10px 18px; cursor:pointer; font-size:13px; transition:transform 0.1s ease, opacity .15s, box-shadow .2s;
+  }
+  button:active{transform:scale(0.97);}
+  .btn-primary{
+    background:linear-gradient(100deg, var(--holo-1), var(--holo-3) 60%, var(--holo-1));
+    background-size:200% auto; color:#181305;
+  }
+  .btn-primary:hover{background-position:100% 0; box-shadow:0 4px 16px rgba(224,185,95,0.3);}
+  .btn-ghost{background:transparent; color:var(--muted); border:1px solid var(--border);}
+  .btn-ghost:hover{color:var(--text); border-color:var(--muted);}
+
+  .box-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(170px,1fr)); gap:14px;}
+  .box-card{
+    position:relative; background:var(--surface); border:1px solid var(--card-glow, var(--border)); border-radius:16px;
+    cursor:pointer; overflow:hidden; aspect-ratio:3/4; display:flex; flex-direction:column;
+    box-shadow:0 6px 18px rgba(0,0,0,0.3);
+    transition:border-color .2s, box-shadow .2s, transform .15s;
+  }
+  .box-card:hover{transform:translateY(-2px); box-shadow:0 10px 26px rgba(0,0,0,0.4), 0 0 0 1px var(--card-glow, var(--gold)) inset;}
+  .box-card::before{
+    content:""; position:absolute; inset:0; z-index:3; pointer-events:none; opacity:0;
+    background:linear-gradient(115deg, transparent 25%, rgba(224,185,95,0.38) 42%, rgba(122,217,214,0.38) 50%, rgba(232,143,194,0.38) 58%, transparent 75%);
+    background-size:250% 250%; background-position:-30% -30%;
+    transition:opacity .25s;
+  }
+  .box-card:hover::before{opacity:1; background-position:130% 130%; transition:background-position 1s ease, opacity .25s;}
+  .box-thumb{
+    position:relative; flex:1; background-size:cover; background-position:center;
+    display:flex; align-items:center; justify-content:center;
+    background-color:var(--surface-2); outline:none; caret-color:transparent; -webkit-user-select:text;
+  }
+  .box-thumb::before{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(180deg, rgba(7,8,15,0) 30%, rgba(7,8,15,0.65) 65%, rgba(7,8,15,0.97) 100%);
+  }
+  .box-thumb-icon{font-size:32px; opacity:0.3; color:var(--gold); position:relative; z-index:0;}
+  .box-thumb-btn{
+    position:absolute; bottom:8px; left:8px; z-index:2; background:rgba(7,8,15,0.75); border:1px solid var(--border);
+    color:var(--muted); font-size:10.5px; padding:4px 9px; border-radius:20px; cursor:pointer;
+    font-family:var(--display);
+  }
+  .box-thumb-btn:hover{color:var(--gold); border-color:var(--gold);}
+  .box-name{
+    position:relative; z-index:1; font-family:var(--display); font-weight:700; font-size:13.5px;
+    line-height:1.3; padding:0 12px 10px; color:#fff;
+    text-shadow:0 1px 3px rgba(0,0,0,0.85), 0 1px 10px rgba(0,0,0,0.6);
+  }
+  .box-meta{
+    position:relative; z-index:1; display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--muted);
+    padding:9px 12px; border-top:1px solid var(--border); background:var(--surface);
+  }
+  .box-rate{font-family:var(--mono); font-weight:800; font-size:14px;}
+  .box-price{font-family:var(--mono); font-size:10.5px; color:var(--muted);}
+  .box-release{font-size:10px; font-weight:500; color:rgba(255,255,255,0.7); margin-top:2px; font-family:var(--mono);}
+  .box-del{
+    position:absolute; top:8px; right:8px; z-index:4; background:rgba(7,8,15,0.75); border:1px solid var(--border); color:var(--muted);
+    font-size:12px; padding:3px 7px; border-radius:8px; cursor:pointer;
+  }
+  .box-del:hover{color:var(--lose); border-color:var(--lose);}
+  .add-box-row{display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap;}
+  .add-box-row input[type=text]{flex:1; min-width:180px;}
+  .mini-field{display:flex; flex-direction:column; gap:3px;}
+  .mini-field label{font-size:9.5px; margin:0; white-space:nowrap;}
+  .file-btn{
+    display:inline-flex; align-items:center; gap:6px; background:var(--surface-2); border:1px solid var(--border);
+    color:var(--muted); border-radius:8px; padding:9px 14px; font-size:12.5px; cursor:pointer;
+    font-family:var(--display); white-space:nowrap;
+  }
+  .file-btn:hover{color:var(--text); border-color:var(--gold);}
+  .file-btn.has-file{color:var(--gold); border-color:var(--gold);}
+  .add-box-hint{font-size:11px; color:var(--muted); margin-top:6px;}
+
+  .ai-panel{border-color:var(--holo-2);}
+  .ai-panel h2{color:var(--holo-2);}
+  .ai-panel h2::before{content:"◆"; color:var(--holo-2);}
+  .ai-divider{font-size:11px; color:var(--muted); margin:10px 0 8px; display:flex; align-items:center; gap:8px;}
+  .ai-divider::before, .ai-divider::after{content:""; flex:1; height:1px; background:var(--border);}
+  .ai-status{margin-top:10px; font-size:12px; min-height:16px;}
+  .ai-status-loading{color:var(--muted);}
+  .ai-status-ok{color:var(--win);}
+  .ai-status-error{color:var(--lose);}
+
+  .tag-list{display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;}
+  .tag-chip{
+    display:inline-flex; align-items:center; gap:6px; background:var(--surface-2); border:1px solid var(--gold);
+    color:var(--gold); font-size:12px; font-family:var(--display); font-weight:700; padding:5px 6px 5px 11px; border-radius:16px;
+  }
+  .tag-chip button{
+    background:none; border:none; color:var(--muted); cursor:pointer; font-size:11px; padding:2px 5px;
+    border-radius:50%; line-height:1;
+  }
+  .tag-chip button:hover{color:var(--lose);}
+
+  .upcoming-check{display:flex; align-items:center; gap:11px; cursor:pointer; flex:1; min-width:0;}
+  .upcoming-check input[type=checkbox]{
+    width:19px; height:19px; flex:none; accent-color:var(--gold); cursor:pointer;
+  }
+  .entry-date-input{
+    background:transparent; border:none; border-bottom:1px dashed var(--border); color:var(--text);
+    font-family:var(--mono); font-size:11.5px; padding:1px 2px; width:auto; cursor:pointer;
+  }
+  .entry-date-input:focus{outline:none; border-bottom-color:var(--gold);}
+
+  .price-edit-input{
+    background:transparent; border:none; border-bottom:1px dashed var(--border); color:var(--text);
+    font-family:var(--mono); font-weight:800; font-size:20px; padding:1px 2px; width:110px;
+  }
+  .price-edit-input:focus{outline:none; border-bottom-color:var(--gold);}
+  .price-edit-input::placeholder{color:var(--muted); font-weight:500; font-size:13px;}
+
+  .name-edit-input{
+    background:transparent; border:none; border-bottom:1px dashed var(--border); color:var(--text);
+    font-family:var(--display); font-weight:800; font-size:17px; padding:1px 2px; width:100%;
+  }
+  .name-edit-input:focus{outline:none; border-bottom-color:var(--gold);}
+
+  .suggest-wrap{position:relative;}
+  .suggest-dropdown{
+    display:none; position:absolute; top:100%; left:0; right:0; z-index:60; margin-top:4px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+    max-height:220px; overflow-y:auto; box-shadow:0 10px 24px rgba(0,0,0,.4);
+  }
+  .suggest-dropdown.open{display:block;}
+  .suggest-item{padding:9px 12px; font-size:13px; cursor:pointer; border-bottom:1px solid var(--border);}
+  .suggest-item:last-child{border-bottom:none;}
+  .suggest-item:hover{background:rgba(244,197,66,0.12); color:var(--gold);}
+
+  .shop-filter-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+  .shop-filter-tab{
+    font-family:var(--display); font-size:12px; font-weight:700; padding:6px 14px; border-radius:20px;
+    border:1px solid var(--border); background:var(--surface); color:var(--muted); cursor:pointer; transition:.15s;
+  }
+  .shop-filter-tab:hover{border-color:var(--gold); color:var(--text);}
+  .shop-filter-tab.active{background:var(--gold-soft); border-color:var(--gold); color:var(--gold);}
+
+  .shop-tag-chip{
+    font-size:10px; font-weight:800; padding:2px 8px; border-radius:20px; margin-left:8px; white-space:nowrap;
+  }
+  .shop-tag-chip.tag-real{background:rgba(122,217,214,0.16); color:var(--holo-2);}
+  .shop-tag-chip.tag-online{background:rgba(232,143,194,0.18); color:var(--holo-3);}
+
+  .shop-edit-row{display:flex; gap:8px; align-items:flex-start; margin-bottom:12px; flex-wrap:wrap;}
+  .shop-edit-row input[type=text]{
+    font-family:var(--display); font-weight:700; font-size:14px; padding:8px 10px;
+    background:var(--surface-2); border:1px solid var(--border); border-radius:8px; color:var(--text); width:100%;
+  }
+  .shop-edit-row select{
+    font-family:var(--display); font-size:12.5px; padding:8px 10px; border-radius:8px;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text);
+  }
+
+  .resale-block{
+    position:relative; z-index:1; margin-top:10px; padding:10px 12px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:10px;
+  }
+  .resale-row{display:flex; justify-content:space-between; align-items:center; font-size:11.5px; color:var(--muted); margin-bottom:4px;}
+  .resale-row:last-of-type{margin-bottom:0;}
+  .resale-profit{margin-top:6px; font-family:var(--mono); font-weight:800; font-size:14px; border-top:1px dashed var(--border); padding-top:6px;}
+  .resale-hint{margin-top:6px; font-size:10.5px; color:var(--muted);}
+
+  .shop-history-layout{display:grid; grid-template-columns:1fr 300px; gap:18px; align-items:start;}
+  .shop-history-side{position:sticky; top:16px;}
+  @media (max-width: 760px){
+    .shop-history-layout{grid-template-columns:1fr;}
+    .shop-history-side{position:static;}
+  }
+
+  /* ===== スマホ向け最適化 ===== */
+  .back-bar{
+    display:flex; align-items:center; gap:8px; margin-bottom:14px;
+  }
+  .back-btn{
+    display:inline-flex; align-items:center; gap:5px;
+    background:var(--surface); border:1px solid var(--border); color:var(--text);
+    font-family:var(--display); font-weight:700; font-size:13px;
+    padding:8px 14px 8px 10px; border-radius:20px; cursor:pointer;
+    transition:border-color .15s, color .15s;
+  }
+  .back-btn:hover{border-color:var(--gold); color:var(--gold);}
+  .back-btn .arrow{font-size:15px; line-height:1;}
+
+  @media (max-width: 600px){
+    body{padding:18px 10px 60px;}
+    .wrap{max-width:100%;}
+    h1{font-size:18px; gap:7px;}
+    h1 .mark{width:25px; height:25px; font-size:12px; border-radius:7px;}
+    .subtitle{font-size:10.5px; padding-left:32px;}
+    .backup-row{padding-left:0; gap:6px; margin-top:10px;}
+    .backup-row .mini-btn, .backup-row label.mini-btn{font-size:10.5px; padding:6px 10px;}
+    .store-map-banner{padding:11px 13px; font-size:18px; margin-top:12px; flex-wrap:wrap;}
+    .store-map-banner span:first-of-type{font-size:13px;}
+    .store-map-banner-sub{flex-basis:100%; margin-left:30px; font-size:10px; margin-top:-4px;}
+    .quick-access-row{flex-direction:column; gap:8px; margin-top:12px;}
+    .quick-access-row .store-map-banner{margin-top:0;}
+
+    .cat-tabs{
+      flex-wrap:nowrap; overflow-x:auto; -webkit-overflow-scrolling:touch;
+      margin:14px -10px 16px; padding:0 10px 4px; scrollbar-width:none;
+    }
+    .cat-tabs::-webkit-scrollbar{display:none;}
+    .cat-tab{padding:8px 13px; font-size:12px; flex:none; white-space:nowrap;}
+
+    .stats-row{grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:18px;}
+    .stat-card{padding:10px 11px; border-radius:10px;}
+    .stat-label{font-size:9.5px; margin-bottom:5px;}
+    .stat-value{font-size:18px;}
+
+    .box-grid{grid-template-columns:repeat(2, 1fr); gap:9px;}
+    .clip-grid{grid-template-columns:repeat(2, 1fr); gap:8px;}
+    .box-name{font-size:11.5px; padding:0 8px 8px;}
+    .box-meta{padding:7px 8px; font-size:9.5px;}
+    .box-rate{font-size:12px;}
+    .box-thumb-icon{font-size:24px;}
+    .box-thumb-btn{font-size:9px; padding:3px 7px;}
+
+    .panel{padding:13px; border-radius:12px; margin-bottom:16px;}
+    .panel h2{font-size:12.5px;}
+    .form-grid{grid-template-columns:1fr; gap:9px;}
+
+    .card-grid{grid-template-columns:1fr; gap:9px;}
+    .entry{padding:12px 12px 10px;}
+
+    .filter-row{flex-wrap:wrap;}
+    .filter-row select{min-width:0; flex:1;}
+
+    .confirm-box, .breakdown-box{max-width:100%;}
+    .breakdown-box{padding:16px;}
+    #storeMapEl{height:min(60vh, 520px) !important; min-height:340px !important;}
+
+    .crumb{margin-bottom:10px;}
+  }
+  .finance-panel{margin-bottom:0;}
+  .category-finance-row{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:10px; padding:12px 13px; margin-bottom:10px;
+  }
+  .category-finance-row:last-child{margin-bottom:0;}
+  .category-finance-name{
+    font-family:var(--display); font-weight:700; font-size:13px; margin-bottom:8px; display:flex; align-items:center; gap:7px;
+  }
+  .category-finance-name .dot{width:8px; height:8px; border-radius:50%; flex:none;}
+  .category-finance-line{
+    display:flex; justify-content:space-between; gap:8px; font-size:11px; color:var(--muted);
+    margin-bottom:4px; font-family:var(--mono);
+  }
+  .category-finance-line b{color:var(--text); font-weight:600;}
+  .category-finance-profit{
+    margin-top:7px; padding-top:7px; border-top:1px dashed var(--border);
+    font-family:var(--mono); font-weight:800; font-size:14px;
+  }
+
+  .confirm-overlay{
+    position:fixed; inset:0; z-index:2000; background:rgba(4,5,10,0.72);
+    display:flex; align-items:center; justify-content:center; padding:20px;
+    animation:fadeIn .15s ease;
+  }
+  @keyframes fadeIn{from{opacity:0;} to{opacity:1;}}
+  .confirm-box{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:22px;
+    max-width:320px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  .confirm-box p{font-size:13.5px; line-height:1.6; margin:0 0 18px; color:var(--text);}
+  .confirm-actions{display:flex; gap:8px; justify-content:flex-end;}
+  .confirm-actions .btn-ghost{padding:8px 16px;}
+  .confirm-actions .btn-danger{
+    background:var(--lose); color:#2a0007; font-family:var(--display); font-weight:700;
+    border:none; border-radius:8px; padding:8px 16px; cursor:pointer; font-size:13px;
+  }
+
+  .breakdown-box{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:20px;
+    max-width:420px; width:100%; max-height:80vh; box-shadow:0 20px 60px rgba(0,0,0,0.5);
+    display:flex; flex-direction:column;
+  }
+  .breakdown-title{
+    font-family:var(--display); font-weight:800; font-size:14.5px; margin:0 0 14px; color:var(--gold);
+    display:flex; align-items:center; gap:8px;
+  }
+  .breakdown-list{overflow-y:auto; display:flex; flex-direction:column; gap:7px; margin-bottom:14px;}
+  .breakdown-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 12px; background:var(--surface-2); border:1px solid var(--border); border-radius:9px;
+    cursor:pointer; transition:border-color .15s;
+  }
+  .breakdown-row:hover{border-color:var(--gold);}
+  .breakdown-name{font-family:var(--display); font-weight:700; font-size:13px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .breakdown-meta{color:var(--muted); font-size:11px; font-family:var(--mono); white-space:nowrap; flex:none;}
+  .breakdown-close{align-self:flex-end;}
+
+  .stat-card.clickable{cursor:pointer; transition:border-color .15s, transform .1s;}
+  .stat-card.clickable:hover{border-color:var(--gold); transform:translateY(-1px);}
+
+  .type-badge{
+    display:inline-block; font-family:var(--mono); font-size:10px; font-weight:700;
+    padding:2px 7px; border-radius:20px; vertical-align:middle; letter-spacing:0.02em;
+  }
+  .type-lottery{background:rgba(224,185,95,0.15); color:var(--gold); border:1px solid rgba(224,185,95,0.35);}
+  .type-purchase{background:rgba(122,217,214,0.15); color:var(--holo-2); border:1px solid rgba(122,217,214,0.35);}
+
+  .type-select{
+    font-family:var(--mono); font-size:10px; font-weight:700;
+    padding:2px 6px; border-radius:20px; cursor:pointer; letter-spacing:0.02em;
+  }
+  .type-select.type-lottery{background:rgba(224,185,95,0.15); color:var(--gold); border:1px solid rgba(224,185,95,0.35);}
+  .type-select.type-purchase{background:rgba(122,217,214,0.15); color:var(--holo-2); border:1px solid rgba(122,217,214,0.35);}
+
+  .entry-edit-row{position:relative; z-index:1; margin-top:8px;}
+  .entry-edit-label{font-size:10px; color:var(--muted); font-family:var(--mono); margin-bottom:2px;}
+  .entry-edit-input{
+    background:transparent; border:none; border-bottom:1px dashed var(--border); color:var(--text);
+    font-family:var(--display); font-size:12px; padding:2px 2px; width:100%;
+  }
+  .entry-edit-input:focus{outline:none; border-bottom-color:var(--gold);}
+  .entry-edit-input::placeholder{color:var(--muted);}
+
+  .chain-filter-row{display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;}
+  .chain-filter-chip{
+    font-family:var(--mono); font-size:10.5px; font-weight:700; padding:5px 10px; border-radius:20px;
+    background:var(--surface-2); border:1px solid var(--border); color:var(--text); cursor:pointer;
+    transition:opacity .15s, border-color .15s;
+  }
+  .chain-filter-chip:hover{border-color:var(--gold);}
+  .chain-filter-chip.off{opacity:0.4; text-decoration:line-through;}
+  .chain-filter-chip.reset{color:var(--gold); border-color:var(--gold); text-decoration:none; opacity:1;}
+
+  .store-pin-icon{
+    width:26px; height:26px; border-radius:50%; border:2px solid #0d0e1c;
+    display:flex; align-items:center; justify-content:center;
+    font-family:sans-serif; font-weight:800; font-size:11px; color:#0d0e1c;
+    box-shadow:0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  .clip-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:12px;
+  }
+  .clip-card{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px; overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  .clip-card.clip-done{opacity:0.5;}
+  .clip-img{width:100%; aspect-ratio:4/3; object-fit:cover; cursor:pointer; display:block; background:#000;}
+  .clip-noimg{
+    width:100%; aspect-ratio:4/3; display:flex; align-items:center; justify-content:center;
+    font-size:26px; background:var(--surface); cursor:pointer; color:var(--muted);
+  }
+  .clip-body{padding:8px 9px; flex:1;}
+  .clip-url{display:block; color:var(--gold); font-size:10.5px; word-break:break-all; text-decoration:none; margin-bottom:4px;}
+  .clip-url:hover{text-decoration:underline;}
+  .clip-memo{font-size:11.5px; color:var(--text); margin-bottom:4px; line-height:1.4; word-break:break-word;}
+  .clip-date{font-size:9.5px; color:var(--muted); font-family:var(--mono);}
+  .clip-actions{display:flex; gap:6px; padding:0 9px 9px; flex-wrap:wrap;}
+  .clip-actions .mini-btn{font-size:9.5px; padding:5px 8px;}
+
+  .shop-stats-list{display:flex; flex-direction:column; gap:8px;}
+  .shop-stat-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:11px 14px; background:var(--surface-2); border:1px solid var(--border); border-radius:10px;
+  }
+  .shop-stat-name{font-family:var(--display); font-weight:700; font-size:13.5px;}
+  .shop-stat-detail{color:var(--muted); font-size:11.5px; margin-top:3px; font-family:var(--mono);}
+  .shop-stat-rate{font-family:var(--mono); font-weight:800; font-size:17px; white-space:nowrap;}
+
+  .filter-row{display:flex; gap:10px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .filter-row select{width:auto; min-width:140px;}
+  .filter-row .spacer{flex:1;}
+  .count-badge{font-size:12px; color:var(--muted); font-family:var(--mono);}
+
+  .card-grid{display:grid; grid-template-columns:repeat(auto-fill, minmax(260px,1fr)); gap:12px;}
+  .entry{
+    position:relative; background:var(--surface);
+    border:1px solid var(--border); border-radius:14px; padding:14px 14px 12px; overflow:hidden;
+    transition:border-color .2s, transform .15s;
+  }
+  .entry:hover{transform:translateY(-1px); border-color:var(--holo-2);}
+  .entry.suggest-clip-off{overflow:visible;}
+  .entry::before{
+    content:""; position:absolute; inset:0; pointer-events:none; opacity:0;
+    background:linear-gradient(115deg, transparent 25%, rgba(224,185,95,0.3) 42%, rgba(122,217,214,0.3) 50%, rgba(232,143,194,0.3) 58%, transparent 75%);
+    background-size:250% 250%; background-position:-30% -30%; transition:opacity .25s;
+  }
+  .entry:hover::before{opacity:1; background-position:130% 130%; transition:background-position 1s ease, opacity .25s;}
+  .entry-top{position:relative; z-index:1; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .entry-shop{font-family:var(--display); font-weight:700; font-size:15px; line-height:1.3;}
+  .entry-shop-input{
+    font-family:var(--display); font-weight:700; font-size:15px; line-height:1.3;
+    background:transparent; border:none; border-bottom:1px dashed transparent; color:var(--text);
+    padding:0 0 2px; width:auto; max-width:75%;
+  }
+  .entry-shop-input:hover{border-bottom-color:var(--border);}
+  .entry-shop-input:focus{outline:none; border-bottom-color:var(--gold);}
+  .status-tag{
+    font-size:11px; font-weight:700; padding:4px 9px; border-radius:20px; white-space:nowrap;
+    font-family:var(--display);
+  }
+  .status-won{background:var(--win-soft); color:var(--win);}
+  .status-lost{background:var(--lose-soft); color:var(--lose);}
+  .status-pending{background:var(--pending-soft); color:var(--pending);}
+  .entry-dates{position:relative; z-index:1; margin-top:10px; font-size:11.5px; color:var(--muted); font-family:var(--mono);}
+  .entry-dates b{color:var(--text); font-weight:500;}
+  .entry-url{position:relative; z-index:1; margin-top:8px;}
+  .entry-url a{color:var(--gold); font-size:12px; text-decoration:none; word-break:break-all;}
+  .entry-url a:hover{text-decoration:underline;}
+  .entry-memo{position:relative; z-index:1; margin-top:8px; font-size:12px; color:var(--muted); border-top:1px dashed var(--border); padding-top:8px;}
+  .entry-actions{position:relative; z-index:1; margin-top:12px; display:flex; gap:6px; flex-wrap:wrap;}
+  .mini-btn{
+    font-size:11px; padding:5px 10px; border-radius:6px; border:1px solid var(--border);
+    background:var(--surface-2); color:var(--muted); cursor:pointer; font-family:var(--display);
+  }
+  .mini-btn.win-btn:hover{color:var(--win); border-color:var(--win);}
+  .mini-btn.lose-btn:hover{color:var(--lose); border-color:var(--lose);}
+  .mini-btn.del-btn:hover{color:var(--lose);}
+
+  .empty{text-align:center; color:var(--muted); padding:50px 20px; border:1px dashed var(--border); border-radius:14px; font-size:13px;}
+  .loading{text-align:center; color:var(--muted); padding:40px; font-size:13px;}
+
+  .upcoming-panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px 18px; margin-bottom:20px;
+  }
+  .upcoming-panel h2{
+    font-family:var(--display); font-size:14px; margin:0 0 12px; color:var(--gold);
+    display:flex; align-items:center; gap:8px;
+  }
+  .upcoming-panel h2::before{content:"⏰"; font-size:12px;}
+  .upcoming-list{display:flex; flex-direction:column; gap:7px;}
+  .upcoming-row{
+    display:flex; align-items:center; gap:10px; padding:9px 12px; background:var(--surface-2);
+    border:1px solid var(--border); border-radius:9px; cursor:pointer; transition:border-color .15s;
+  }
+  .upcoming-row:hover{border-color:var(--gold);}
+  .upcoming-when{
+    font-family:var(--mono); font-weight:800; font-size:12px; padding:4px 9px; border-radius:6px;
+    white-space:nowrap; flex:none; min-width:56px; text-align:center;
+  }
+  .upcoming-when.today{background:var(--gold-soft); color:var(--gold);}
+  .upcoming-when.soon{background:var(--lose-soft); color:var(--lose);}
+  .upcoming-when.overdue{background:var(--lose); color:#2a0007;}
+  .upcoming-when.later{background:var(--pending-soft); color:var(--pending);}
+  .upcoming-info{flex:1; min-width:0;}
+  .upcoming-shop{font-family:var(--display); font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .upcoming-meta{font-size:11px; color:var(--muted); margin-top:2px;}
+  .upcoming-type{
+    font-size:9.5px; font-weight:700; padding:2px 7px; border-radius:10px; font-family:var(--display); white-space:nowrap;
+  }
+  .upcoming-type.announce{background:rgba(232,143,194,0.18); color:var(--holo-3); font-weight:800;}
+  .upcoming-type.apply{background:rgba(122,217,214,0.16); color:var(--holo-2);}
+  .upcoming-type.deadline{background:var(--lose-soft); color:var(--lose); font-weight:800;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="mark">◆</span><span class="accent">トレカ抽選トラッカー</span></h1>
+    <div class="subtitle">カテゴリ → BOX → 抽選記録で管理</div>
+    <div class="backup-row">
+      <button type="button" class="mini-btn" onclick="exportData()">📥 バックアップを保存</button>
+      <label class="mini-btn" for="importFile">📤 バックアップを読み込む</label>
+      <input id="importFile" type="file" accept="application/json" style="display:none" onchange="importData(event)">
+    </div>
+  </header>
+
+  <div class="quick-access-row">
+    <button type="button" id="shopHistoryBanner" class="store-map-banner shop-history-banner" onclick="viewShopHistory()">
+      🏪 <span>店舗別履歴</span><span class="store-map-banner-sub">ショップごとの当選率・購入履歴</span>
+    </button>
+    <button type="button" id="storeMapBanner" class="store-map-banner" onclick="viewStoreMap()">
+      🗺️ <span>店舗マップ</span><span class="store-map-banner-sub">コンビニ・量販店の販売情報を地図で管理</span>
+    </button>
+  </div>
+
+  <div id="upcomingArea"></div>
+  <div class="cat-tabs" id="catTabs"></div>
+  <div id="mainArea" class="loading">読み込み中...</div>
+  <input id="boxThumbInput" type="file" accept="image/*" style="display:none" onchange="onThumbFileChange()">
+  <div id="confirmArea"></div>
+</div>
+
+<script>
+const CATEGORIES = ['ポケカ','ONE PIECE','ドラゴンボール','遊戯王'];
+const CATEGORY_COLORS = {
+  'ポケカ': '#f4c542',
+  'ONE PIECE': '#e5484d',
+  'ドラゴンボール': '#ff8a3d',
+  '遊戯王': '#a56bef'
+};
+const STORAGE_KEY = 'tcg_lottery_data_v1';
+
+// Claudeのアーティファクト環境の外（スタンドアロン/PWA版）で開いた場合、window.storage は存在しないため、
+// ブラウザのlocalStorageを使って同じインターフェース(get/set/delete/list)を再現する。
+// これにより同じ1つのHTMLファイルが、Claude内でもスタンドアロンでもそのまま動く。
+if(typeof window.storage === 'undefined'){
+  const SHIM_PREFIX = 'claude_storage_shim::';
+  window.storage = {
+    async get(key, shared){
+      try{
+        const raw = localStorage.getItem(SHIM_PREFIX + key);
+        if(raw === null) return null;
+        return { key, value: raw, shared: !!shared };
+      }catch(e){ return null; }
+    },
+    async set(key, value, shared){
+      try{
+        localStorage.setItem(SHIM_PREFIX + key, value);
+        return { key, value, shared: !!shared };
+      }catch(e){ return null; }
+    },
+    async delete(key, shared){
+      try{
+        localStorage.removeItem(SHIM_PREFIX + key);
+        return { key, deleted: true, shared: !!shared };
+      }catch(e){ return null; }
+    },
+    async list(prefix, shared){
+      try{
+        const keys = [];
+        const p = SHIM_PREFIX + (prefix || '');
+        for(let i=0;i<localStorage.length;i++){
+          const k = localStorage.key(i);
+          if(k && k.indexOf(p)===0) keys.push(k.slice(SHIM_PREFIX.length));
+        }
+        return { keys, prefix, shared: !!shared };
+      }catch(e){ return null; }
+    }
+  };
+}
+
+// カテゴリごとのBOX名候補（過去2年程度の発売実績＋分かっている範囲の発売予定）。
+// 2026年9月時点の情報を元に更新。Web検索を元にした一覧のため抜け漏れ・表記ゆれがある可能性があります。
+// 「BOXを追加」の候補として使うだけなので、一覧になくても自由に手入力できます。誤りに気づいたら教えてください。
+const SUGGESTED_BOX_NAMES = {
+  'ポケカ': [
+    'ハイクラスパック「VSTARユニバース」',
+    '拡張パック「スカーレットex」','拡張パック「バイオレットex」','強化拡張パック「トリプレットビート」',
+    '拡張パック「クレイバースト」','拡張パック「スノーハザード」','強化拡張パック「ポケモンカード151」',
+    '拡張パック「黒炎の支配者」','拡張パック「古代の咆哮」','拡張パック「未来の一閃」',
+    'ハイクラスパック「シャイニートレジャーex」',
+    '拡張パック「サイバージャッジ」','拡張パック「ワイルドフォース」','強化拡張パック「クリムゾンヘイズ」',
+    '拡張パック「変幻の仮面」','強化拡張パック「熱風のアリーナ」','強化拡張パック「楽園ドラゴーナ」',
+    '拡張パック「ステラミラクル」','拡張パック「超電ブレイカー」','ハイクラスパック「テラスタルフェスex」',
+    '強化拡張パック「ナイトワンダラー」','拡張パック「バトルパートナーズ」','拡張パック「インフェルノX」',
+    'スターターセットMEGA メガゲンガーex','スターターセットMEGA メガディアンシーex',
+    '拡張パック「メガブレイブ」','拡張パック「メガシンフォニア」','拡張パック「ホワイトフレア」',
+    '拡張パック「ブラックボルト」','ハイクラスパック「MEGAドリームex」','拡張パック「ムニキスゼロ」',
+    '拡張パック「ニンジャスピナー」','拡張パック「アビスアイ」','拡張パック「ストームエメラルダ」',
+    'スターターセットex イーブイex・ニャオハ&マスカーニャex・ゾロア&ゾロアークex',
+    '30th CELEBRATION プレミアムデッキセット エーフィ・ブラッキー',
+    '拡張パック「30th CELEBRATION」','30th CELEBRATION カードセット'
+  ],
+  'ONE PIECE': [
+    'ブースターパック「ROMANCE DAWN」【OP-01】','ブースターパック「頂上決戦」【OP-02】',
+    'ブースターパック「強大な敵」【OP-03】','ブースターパック「謀略の王国」【OP-04】',
+    'ブースターパック「新時代の主役」【OP-05】','ブースターパック「双璧の覇者」【OP-06】',
+    'エクストラブースター「メモリアルコレクション」【EB-01】','ブースターパック「500年後の未来」【OP-07】',
+    'ブースターパック「二つの伝説」【OP-08】','プレミアムブースター「ONE PIECE CARD THE BEST」【PRB-01】',
+    'ブースターパック「新たなる皇帝」【OP-09】','ブースターパック「王族の血統」【OP-10】',
+    'エクストラブースター「Anime 25th collection」【EB-02】','ブースターパック「神速の拳」【OP-11】',
+    'ブースターパック「師弟の絆」【OP-12】','ブースターパック「受け継がれる意志」【OP-13】',
+    'ブースターパック「蒼海の七傑」【OP-14】','エクストラブースター「EGGHEAD CRISIS」',
+    'ブースターパック「神の島の冒険」【OP-15】','ブースターパック「決戦の刻」【OP-16】',
+    'スタートデッキEX「ルフィ&エース」','ブースターパック「世界最強の戦士」【OP-17】',
+    'エクストラブースター「ONE PIECE Heroines Edition Vol.2」','ブースターパック「神の支配」【OP-18】'
+  ],
+  'ドラゴンボール': [
+    'ブースターパック「覚醒の鼓動」【FB01】','ブースターパック「烈火の闘気」【FB02】',
+    'ブースターパック「怒りの咆哮」【FB03】','ブースターパック「限界を超えし者」【FB04】',
+    'ブースターパック「未知なる冒険」【FB05】','ブースターパック「迫り来る脅威」【FB06】',
+    'ブースターパック「神龍への願い」【FB07】','ブースターパック「誇り高き戦闘民族」【FB08】',
+    'ブースターパック「DUAL EVOLUTION」【FB09】','ブースターパック「CROSS FORCE」【FB10】',
+    'ブースターパック「BRIGHTNESS OF HOPE」【FB11】','STORY BOOSTER 01【ST01】'
+  ],
+  '遊戯王': [
+    'ストラクチャーデッキR「デビルズ・ゲート」','デッキビルドパック「アメイジング・ディフェンダーズ」',
+    'WORLD PREMIERE PACK 2022','PHOTON HYPERNOVA','SELECTION 5','ストラクチャーデッキ「蟲惑魔の森」',
+    'PREMIUM PACK 2023','SECRET UTILITY BOX','CYBERSTORM ACCESS','RARITY COLLECTION -QUARTER CENTURY EDITION-',
+    'デッキビルドパック「ワイルド・サバイバーズ」','DUELIST NEXUS','デュエリストパック -爆炎のデュエリスト編-',
+    'ANIMATION CHRONICLE 2023','ストラクチャーデッキ「王者の鼓動」','AGE OF OVERLORD',
+    'デッキビルドパック「ヴァリアント・スマッシャーズ」','ストラクチャーデッキR「炎王の急襲」',
+    'WORLD PREMIERE PACK 2023','PHANTOM NIGHTMARE','TERMINAL WORLD','PREMIUM PACK 2024',
+    'QUARTER CENTURY DUELIST BOX','LEGACY OF DESTRUCTION',
+    '基本パック「インフィニット・フォビドゥン」','デュエリストパック -輝光のデュエリスト編-',
+    'デュエリストパック -レジェンドデュエリスト編4-','WORLD PREMIERE PACK 2024',
+    'デッキビルドパック「ジャスティス・ハンターズ」','ストラクチャーデッキ「ハーピィ・レディ・シスターズ」',
+    '基本パック「DUELIST ADVANCE」','ストラクチャーデッキ「黒魔術の儀式」',
+    'TACTICAL-TRY PACK -黒魔導・HERO・御巫-','デッキビルドパック「ファントム・リベンジャーズ」',
+    'ストラクチャーデッキ「帝王の凱旋」','WORLD PREMIERE PACK 2025',
+    'THE CHRONICLES DECK -白の物語-','PREMIUM PACK 2026','DUELIST BOX -PRISMATIC SUMMON-',
+    'BLAZING DOMINION','LIMIT OVER COLLECTION -THE HEROES-',
+    'THE CHRONICLES DECK 精霊術の使い手','CHAOS ORIGINS','REVOLUTION BOOSTER -トゥーン・ウィッチクラフト・破械-',
+    'WORLD PREMIERE PACK 2026','BEYOND THE BRAVE','デッキビルドパック -グロリアス・ヴィクターズ-',
+    '遊☆戯☆王 ORIGINAL ARTWORK COLLECTION','IMMORTAL PHOENIX','REVOLUTION BOOSTER -方界・マリンセス・ゴーストリック-',
+    'THE CHRONICLES DECK DX マギストス'
+  ]
+};
+
+let data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
+let pendingConfirmAction = null;
+
+function showConfirm(message, onYes){
+  pendingConfirmAction = onYes;
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="confirm-box">
+        <p>${escapeHtml(message)}</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn-ghost" onclick="closeConfirm()">キャンセル</button>
+          <button type="button" class="btn-danger" onclick="runConfirm()">削除する</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function closeConfirm(){
+  pendingConfirmAction = null;
+  document.getElementById('confirmArea').innerHTML = '';
+}
+
+function showMessage(message){
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="confirm-box">
+        <p>${escapeHtml(message)}</p>
+        <div class="confirm-actions">
+          <button type="button" class="btn-primary" onclick="closeConfirm()">OK</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function runConfirm(){
+  const action = pendingConfirmAction;
+  closeConfirm();
+  if(action) action();
+}
+
+function showBreakdown(title, rowsHtml){
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="breakdown-box">
+        <h3 class="breakdown-title">◆ ${escapeHtml(title)}</h3>
+        <div class="breakdown-list">${rowsHtml}</div>
+        <button type="button" class="btn-ghost breakdown-close" onclick="closeConfirm()">閉じる</button>
+      </div>
+    </div>
+  `;
+}
+
+function statBreakdownRows(boxes, catEntries, statuses){
+  const lotteryEntries = catEntries.filter(e=>!isPurchaseType(e));
+  const rows = boxes.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(b=>{
+    const entries = lotteryEntries.filter(e=> e.boxId===b.id && statuses.includes(e.status));
+    if(entries.length===0) return '';
+    const won = entries.filter(e=>e.status==='won').length;
+    const lost = entries.filter(e=>e.status==='lost').length;
+    const pending = entries.filter(e=>e.status==='pending').length;
+    const parts = [];
+    if(statuses.includes('won') || statuses.includes('lost')) parts.push(`当選${won} / 落選${lost}`);
+    if(statuses.includes('pending')) parts.push(`未発表${pending}件`);
+    return `<div class="breakdown-row" onclick="closeConfirm(); openBox('${b.id}')">
+      <span class="breakdown-name">${escapeHtml(b.name)}</span>
+      <span class="breakdown-meta">${parts.join(' ・ ')}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+  return rows;
+}
+
+function showWinLossBreakdown(){
+  const boxes = data.boxes.filter(b=>b.category===state.category);
+  const catEntries = data.entries.filter(e=> boxes.some(b=>b.id===e.boxId));
+  const rows = statBreakdownRows(boxes, catEntries, ['won','lost']);
+  showBreakdown(`${state.category} 当選/落選の内訳（BOX別・抽選のみ）`, rows || '<div class="empty" style="padding:24px 14px;">まだ当選・落選の記録がありません。</div>');
+}
+
+function showPendingBreakdown(){
+  const boxes = data.boxes.filter(b=>b.category===state.category);
+  const catEntries = data.entries.filter(e=> boxes.some(b=>b.id===e.boxId));
+  const rows = statBreakdownRows(boxes, catEntries, ['pending']);
+  showBreakdown(`${state.category} 結果待ちの内訳（BOX別・抽選のみ）`, rows || '<div class="empty" style="padding:24px 14px;">結果待ちの記録はありません。</div>');
+}
+
+function showPurchaseBreakdown(){
+  const boxes = data.boxes.filter(b=>b.category===state.category);
+  const catEntries = data.entries.filter(e=> boxes.some(b=>b.id===e.boxId) && isPurchaseType(e));
+  const rows = boxes.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(b=>{
+    const entries = catEntries.filter(e=>e.boxId===b.id);
+    if(entries.length===0) return '';
+    const purchased = entries.filter(e=>e.status==='won').length;
+    const notPurchased = entries.length - purchased;
+    return `<div class="breakdown-row" onclick="closeConfirm(); openBox('${b.id}')">
+      <span class="breakdown-name">${escapeHtml(b.name)}</span>
+      <span class="breakdown-meta">購入済み${purchased} / 未購入${notPurchased}</span>
+    </div>`;
+  }).filter(Boolean).join('');
+  showBreakdown(`${state.category} 通常購入の内訳（BOX別）`, rows || '<div class="empty" style="padding:24px 14px;">通常購入の記録はありません。</div>');
+}
+
+function showBoxCountBreakdown(){
+  const boxes = data.boxes.filter(b=>b.category===state.category);
+  const catEntries = data.entries.filter(e=> boxes.some(b=>b.id===e.boxId));
+  const rows = boxes.slice().sort((a,b)=>a.name.localeCompare(b.name,'ja')).map(b=>{
+    const entries = catEntries.filter(e=>e.boxId===b.id);
+    const lotteryEntries = entries.filter(e=>!isPurchaseType(e));
+    const purchaseEntries = entries.filter(e=>isPurchaseType(e));
+    const won = lotteryEntries.filter(e=>e.status==='won').length;
+    const lost = lotteryEntries.filter(e=>e.status==='lost').length;
+    const pending = lotteryEntries.filter(e=>e.status==='pending').length;
+    const purchased = purchaseEntries.filter(e=>e.status==='won').length;
+    const notPurchased = purchaseEntries.length - purchased;
+    const metaParts = [];
+    if(lotteryEntries.length) metaParts.push(`当選${won} / 落選${lost} / 未発表${pending}`);
+    if(purchaseEntries.length) metaParts.push(`購入済み${purchased} / 未購入${notPurchased}`);
+    const meta = metaParts.length ? metaParts.join(' ・ ') : '記録なし';
+    return `<div class="breakdown-row" onclick="closeConfirm(); openBox('${b.id}')">
+      <span class="breakdown-name">${escapeHtml(b.name)}</span>
+      <span class="breakdown-meta">${meta}</span>
+    </div>`;
+  }).join('');
+  showBreakdown(`${state.category} 登録BOXの内訳（${boxes.length}件）`, rows || '<div class="empty" style="padding:24px 14px;">まだBOXが登録されていません。</div>');
+}
+
+function exportData(){
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const today = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = `トレカ抽選トラッカー_バックアップ_${today}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function importData(event){
+  const file = event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    let imported;
+    try{
+      imported = JSON.parse(reader.result);
+    }catch(e){
+      showMessage('ファイルの読み込みに失敗しました。正しいバックアップファイルか確認してください。');
+      return;
+    }
+    if(!imported || !Array.isArray(imported.boxes) || !Array.isArray(imported.entries)){
+      showMessage('このファイルはバックアップの形式と異なるようです。');
+      return;
+    }
+    showConfirm('現在のデータを、読み込んだバックアップの内容で上書きします。よろしいですか？', ()=>{
+      data = {
+        boxes: imported.boxes || [],
+        entries: imported.entries || [],
+        upcoming: imported.upcoming || [],
+        shopMeta: imported.shopMeta || {}
+      };
+      save();
+      render();
+    });
+  };
+  reader.onerror = () => showMessage('ファイルの読み込みに失敗しました。');
+  reader.readAsText(file);
+}
+
+let state = { category: CATEGORIES[0], view: 'boxes', boxId: null, boxSort: 'default', shopFilter: 'all', mapArea: 'fuji', hiddenChains: new Set() };
+let newBoxImageFile = null;
+let pendingThumbBoxId = null;
+let pendingClipImage = null;
+
+function resizeImageFile(file, maxSize=440, quality=0.82){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('画像の読み込みに失敗しました'));
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        if(w > h){ if(w > maxSize){ h = Math.round(h * maxSize / w); w = maxSize; } }
+        else{ if(h > maxSize){ w = Math.round(w * maxSize / h); h = maxSize; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataUrlToBlob(dataUrl){
+  const m = dataUrl.match(/^data:([^;]+);base64,(.*)$/);
+  if(!m) return null;
+  const mime = m[1];
+  const bytes = atob(m[2]);
+  const arr = new Uint8Array(bytes.length);
+  for(let i=0;i<bytes.length;i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+async function load(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY, false);
+    data = res && res.value ? JSON.parse(res.value) : { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
+  }catch(e){
+    data = { boxes: [], entries: [], upcoming: [], shopMeta: {}, clips: [], stores: [] };
+  }
+  if(!data.upcoming) data.upcoming = [];
+  if(!data.shopMeta) data.shopMeta = {};
+  if(!data.clips) data.clips = [];
+  if(!data.stores) data.stores = [];
+  let migrated = false;
+  // チェーン名／支店名／登録番号(連番)を持たない旧データを移行する
+  let maxSeq = 0;
+  data.stores.forEach(s=>{
+    if(s.seq) maxSeq = Math.max(maxSeq, s.seq);
+  });
+  data.stores.forEach(s=>{
+    if(s.chain === undefined){
+      s.chain = s.name || 'その他';
+      s.branchName = s.branchName || '';
+      migrated = true;
+    }
+    if(!s.seq){
+      maxSeq += 1;
+      s.seq = maxSeq;
+      migrated = true;
+    }
+    // 旧仕様（1店舗につき1状態のみ）のデータを、日付つきの記録配列(records)へ移行する。
+    if(!Array.isArray(s.records)){
+      s.records = [];
+      if(s.releaseDay || s.purchaseLimit || s.restock || s.memo){
+        s.records.push({
+          id: 'migrated-' + s.id,
+          date: (s.updatedAt || new Date().toISOString()).slice(0,10),
+          releaseDay: s.releaseDay || 'unknown',
+          purchaseLimit: s.purchaseLimit || 'unknown',
+          limitDetail: s.limitDetail || '',
+          restock: s.restock || 'unknown',
+          restockDetail: s.restockDetail || '',
+          memo: s.memo || '',
+          createdAt: s.updatedAt || new Date().toISOString()
+        });
+      }
+      migrated = true;
+    }
+    if(s.address === undefined){ s.address = ''; migrated = true; }
+  });
+  if(typeof data.storeSeqCounter !== 'number' || data.storeSeqCounter < maxSeq){
+    data.storeSeqCounter = maxSeq;
+    migrated = true;
+  }
+  // 種別(抽選/通常購入)が未設定の既存データは、これまで通り「抽選」として明示的に埋めておく
+  // また、時刻対応前の「日付のみ」データは datetime-local 欄に表示されるよう T00:00 を補って移行する（時刻は仮値。あとで調整可）
+  const toDateTimeCompat = v => (v && /^\d{4}-\d{2}-\d{2}$/.test(v)) ? v + 'T00:00' : v;
+  data.entries.forEach(e=>{
+    if(!e.type){ e.type = 'lottery'; migrated = true; }
+    const fixed = toDateTimeCompat(e.date);
+    if(fixed !== e.date){ e.date = fixed; migrated = true; }
+  });
+  data.upcoming.forEach(u=>{
+    if(!u.type){ u.type = 'lottery'; migrated = true; }
+    const fixedDate = toDateTimeCompat(u.date);
+    if(fixedDate !== u.date){ u.date = fixedDate; migrated = true; }
+    const fixedDeadline = toDateTimeCompat(u.deadline);
+    if(fixedDeadline !== u.deadline){ u.deadline = fixedDeadline; migrated = true; }
+  });
+  if(migrated) save();
+  renderTabs();
+  render();
+}
+
+async function save(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify(data), false);
+  }catch(e){
+    console.error('保存に失敗しました', e);
+  }
+}
+
+function escapeHtml(str){
+  return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function isPurchaseType(e){ return !!e && e.type === 'purchase'; }
+function typeLabel(type){ return type === 'purchase' ? '通常購入' : '抽選'; }
+
+function statusLabel(s, type){
+  if(type === 'purchase') return s==='won' ? '購入済み' : '未購入';
+  return s==='won' ? '当選' : s==='lost' ? '落選' : '未発表';
+}
+function statusClass(s, type){
+  if(type === 'purchase') return s==='won' ? 'status-won' : 'status-pending';
+  return s==='won' ? 'status-won' : s==='lost' ? 'status-lost' : 'status-pending';
+}
+
+// 勝率は「抽選」タイプのみ対象（通常購入は外れがないため）
+function rateOf(list){
+  const lotteryList = list.filter(e=>!isPurchaseType(e));
+  const won = lotteryList.filter(e=>e.status==='won').length;
+  const lost = lotteryList.filter(e=>e.status==='lost').length;
+  const d = won+lost;
+  return d ? Math.round(won/d*100) : null;
+}
+
+function getAllShopNames(){
+  return [...new Set(data.entries.map(e=>e.shop).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ja'));
+}
+
+const SHOP_TAGS = ['実店舗','オンライン'];
+
+function getShopTag(name){
+  return (data.shopMeta[name] && data.shopMeta[name].tag) || '';
+}
+
+function setShopTag(name, tag){
+  if(!data.shopMeta[name]) data.shopMeta[name] = {};
+  data.shopMeta[name].tag = tag || '';
+  save();
+  render();
+}
+
+function renameShop(oldName, newName){
+  const v = (newName || '').trim();
+  if(!v || v === oldName){ render(); return; }
+  data.entries.forEach(e=>{ if(e.shop === oldName) e.shop = v; });
+  data.upcoming.forEach(u=>{ if(u.shop === oldName) u.shop = v; });
+  const oldMeta = data.shopMeta[oldName];
+  if(oldMeta){
+    delete data.shopMeta[oldName];
+    if(!data.shopMeta[v]) data.shopMeta[v] = oldMeta;
+  }
+  save();
+  render();
+}
+
+function getBoxNamesInCategory(category){
+  return [...new Set(data.boxes.filter(b=>b.category===category).map(b=>b.name))].sort((a,b)=>a.localeCompare(b,'ja'));
+}
+
+function getCuratedBoxNameCandidates(){
+  const already = new Set(getBoxNamesInCategory(state.category));
+  return (SUGGESTED_BOX_NAMES[state.category] || []).filter(n=>!already.has(n));
+}
+
+// ---- 候補サジェスト（datalistの代わり。端末によりdatalistのドロップダウンが表示されないため自前で実装） ----
+const SUGGEST_SOURCES = {
+  shop: () => getAllShopNames(),
+  boxName: () => getBoxNamesInCategory(state.category),
+  newBoxCandidate: () => getCuratedBoxNameCandidates()
+};
+
+function showSuggest(inputId, sourceKey, showAll){
+  const input = document.getElementById(inputId);
+  const dropdown = document.getElementById(inputId + '-suggest');
+  if(!input || !dropdown) return;
+  const query = showAll ? '' : input.value.trim().toLowerCase();
+  const source = SUGGEST_SOURCES[sourceKey] ? SUGGEST_SOURCES[sourceKey]() : [];
+  const candidates = source.filter(n => !query || n.toLowerCase().includes(query)).slice(0, 40);
+  const clipParent = input.closest('.entry');
+  if(candidates.length === 0){
+    dropdown.classList.remove('open'); dropdown.innerHTML='';
+    if(clipParent) clipParent.classList.remove('suggest-clip-off');
+    return;
+  }
+  dropdown.innerHTML = candidates.map(n=>`<div class="suggest-item" data-value="${escapeHtml(n)}">${escapeHtml(n)}</div>`).join('');
+  dropdown.classList.add('open');
+  if(clipParent) clipParent.classList.add('suggest-clip-off');
+}
+
+function pickSuggest(inputId, value){
+  const input = document.getElementById(inputId);
+  if(!input) return;
+  input.value = value;
+  input.dispatchEvent(new Event('change', {bubbles:true}));
+  hideSuggest(inputId);
+  input.focus();
+}
+
+function hideSuggest(inputId){
+  const dropdown = document.getElementById(inputId + '-suggest');
+  if(dropdown) dropdown.classList.remove('open');
+  const input = document.getElementById(inputId);
+  const clipParent = input && input.closest('.entry');
+  if(clipParent) clipParent.classList.remove('suggest-clip-off');
+}
+
+let suggestBlurTimer = null;
+function hideSuggestDelayed(inputId){
+  clearTimeout(suggestBlurTimer);
+  suggestBlurTimer = setTimeout(()=> hideSuggest(inputId), 150);
+}
+
+function handleSuggestMousedown(e, inputId){
+  const item = e.target.closest('.suggest-item');
+  if(!item) return;
+  e.preventDefault();
+  pickSuggest(inputId, item.dataset.value);
+}
+
+
+function shopStats(list){
+  const map = {};
+  list.forEach(e=>{
+    if(!e.shop) return;
+    if(!map[e.shop]) map[e.shop] = { shop: e.shop, won:0, lost:0, pending:0, purchased:0, notPurchased:0 };
+    if(isPurchaseType(e)){
+      if(e.status==='won') map[e.shop].purchased++;
+      else map[e.shop].notPurchased++;
+    } else {
+      if(e.status==='won') map[e.shop].won++;
+      else if(e.status==='lost') map[e.shop].lost++;
+      else map[e.shop].pending++;
+    }
+  });
+  return Object.values(map).map(s=>{
+    const d = s.won + s.lost;
+    return { ...s, total: d + s.pending + s.purchased + s.notPurchased, rate: d ? Math.round(s.won/d*100) : null };
+  }).sort((a,b)=>{
+    if(a.rate===null && b.rate===null) return b.total-a.total;
+    if(a.rate===null) return 1;
+    if(b.rate===null) return -1;
+    return b.rate-a.rate;
+  });
+}
+
+function renderShopStatsHtml(list, emptyMsg){
+  const stats = shopStats(list);
+  if(stats.length===0){
+    return `<div class="empty">${emptyMsg}</div>`;
+  }
+  return `<div class="shop-stats-list">` + stats.map(s=>`
+    <div class="shop-stat-row">
+      <div>
+        <div class="shop-stat-name">${escapeHtml(s.shop)}</div>
+        <div class="shop-stat-detail">当選 ${s.won} / 落選 ${s.lost}${s.pending?` / 未発表 ${s.pending}`:''}${(s.purchased||s.notPurchased)?` ・ 購入済み ${s.purchased} / 未購入 ${s.notPurchased}`:''}</div>
+      </div>
+      <div class="shop-stat-rate" style="color:${s.rate!==null?'var(--win)':'var(--muted)'}">${s.rate!==null ? s.rate+'%' : '—'}</div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+let upBoxNameTags = [];
+
+function addUpBoxNameTag(){
+  const input = document.getElementById('upBoxName');
+  const val = input.value.trim();
+  if(!val) return;
+  if(!upBoxNameTags.includes(val)) upBoxNameTags.push(val);
+  input.value = '';
+  renderUpBoxNameTags();
+  input.focus();
+}
+
+function removeUpBoxNameTag(name){
+  upBoxNameTags = upBoxNameTags.filter(t=>t!==name);
+  renderUpBoxNameTags();
+}
+
+function renderUpBoxNameTags(){
+  const el = document.getElementById('upBoxNameTags');
+  if(!el) return;
+  el.innerHTML = upBoxNameTags.map(t=>`
+    <span class="tag-chip">${escapeHtml(t)}<button type="button" onclick="removeUpBoxNameTag('${escapeHtml(t).replace(/'/g, "\\'")}')">✕</button></span>
+  `).join('');
+}
+
+let aiImageData = null;
+
+function onAiImageFileChange(){
+  const input = document.getElementById('aiImageFile');
+  const file = input.files[0];
+  input.value = '';
+  if(!file) return;
+  loadAiImage(file);
+}
+
+function handleAiImagePaste(e){
+  const imageFile = extractImageFromClipboard(e);
+  e.preventDefault();
+  e.stopPropagation();
+  e.target.textContent = '📋 右クリックで貼り付け';
+  if(!imageFile) return;
+  loadAiImage(imageFile);
+}
+
+async function loadAiImage(file){
+  try{
+    aiImageData = await resizeImageFile(file, 1200, 0.85);
+    const label = document.getElementById('aiImageLabel');
+    if(label){ label.textContent = '🖼 画像読込済み'; label.classList.add('has-file'); }
+    const btn = document.getElementById('aiImageFillBtn');
+    if(btn) btn.disabled = false;
+  }catch(err){
+    showMessage('画像の読み込みに失敗しました');
+  }
+}
+
+// ===== 画像・URLメモ（クリップ）機能 =====
+// 抽選ページのスクショやXの投稿URLなど、まだBOX登録するか決めていない・忘れそうなものを
+// カテゴリごとにゆるく保存しておくための機能。
+
+function onClipFileChange(){
+  const input = document.getElementById('clipImageFile');
+  const file = input.files[0];
+  input.value = '';
+  if(!file) return;
+  loadClipImage(file);
+}
+
+function handleClipImagePaste(e){
+  const imageFile = extractImageFromClipboard(e);
+  e.preventDefault();
+  e.stopPropagation();
+  e.target.textContent = '📋 右クリックで貼り付け';
+  if(!imageFile) return;
+  loadClipImage(imageFile);
+}
+
+async function loadClipImage(file){
+  try{
+    pendingClipImage = await resizeImageFile(file, 900, 0.82);
+    const label = document.getElementById('clipImageLabel');
+    if(label){ label.textContent = '🖼 画像読込済み'; label.classList.add('has-file'); }
+  }catch(err){
+    showMessage('画像の読み込みに失敗しました');
+  }
+}
+
+function clearClipImage(){
+  pendingClipImage = null;
+  const label = document.getElementById('clipImageLabel');
+  if(label){ label.textContent = '🖼 画像を選択'; label.classList.remove('has-file'); }
+}
+
+function addClip(){
+  const url = document.getElementById('clipUrl').value.trim();
+  const memo = document.getElementById('clipMemo').value.trim();
+  if(!pendingClipImage && !url && !memo){
+    showMessage('画像・URL・メモのいずれかを入力してください');
+    return;
+  }
+  data.clips.push({
+    id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+    category: state.category,
+    image: pendingClipImage || null,
+    url, memo, done: false,
+    createdAt: new Date().toISOString()
+  });
+  pendingClipImage = null;
+  document.getElementById('clipUrl').value = '';
+  document.getElementById('clipMemo').value = '';
+  save();
+  render();
+}
+
+function toggleClipDone(id){
+  const c = data.clips.find(x=>x.id===id);
+  if(!c) return;
+  c.done = !c.done;
+  save();
+  render();
+}
+
+function removeClip(id){
+  data.clips = data.clips.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function openClipImage(id){
+  const c = data.clips.find(x=>x.id===id);
+  if(!c || !c.image) return;
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="breakdown-box" style="align-items:center; max-width:520px;">
+        <img src="${c.image}" style="max-width:100%; max-height:65vh; border-radius:10px; margin-bottom:12px; display:block;">
+        ${c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" style="color:var(--gold); font-size:12px; margin-bottom:6px; word-break:break-all;">${escapeHtml(c.url)} ↗</a>` : ''}
+        ${c.memo ? `<div style="font-size:12.5px; color:var(--text); margin-bottom:12px; align-self:flex-start;">${escapeHtml(c.memo)}</div>` : ''}
+        <button type="button" class="btn-ghost breakdown-close" onclick="closeConfirm()">閉じる</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderClipGrid(){
+  const clips = data.clips.filter(c=>c.category===state.category).sort((a,b)=> (b.createdAt||'').localeCompare(a.createdAt||''));
+  if(clips.length===0) return '<div class="empty" style="padding:20px; margin-top:14px;">まだ保存されたメモはありません。</div>';
+  return `<div class="clip-grid" style="margin-top:14px;">` + clips.map(c=>`
+    <div class="clip-card ${c.done?'clip-done':''}">
+      ${c.image
+        ? `<img src="${c.image}" class="clip-img" onclick="openClipImage('${c.id}')" alt="">`
+        : `<div class="clip-noimg" onclick="${c.url ? `window.open('${escapeHtml(c.url)}','_blank')` : ''}">📝</div>`}
+      <div class="clip-body">
+        ${c.url ? `<a href="${escapeHtml(c.url)}" target="_blank" rel="noopener" class="clip-url">${escapeHtml(c.url)} ↗</a>` : ''}
+        ${c.memo ? `<div class="clip-memo">${escapeHtml(c.memo)}</div>` : ''}
+        <div class="clip-date">${fmtDateTime((c.createdAt||'').slice(0,16))}</div>
+      </div>
+      <div class="clip-actions">
+        <button class="mini-btn" onclick="toggleClipDone('${c.id}')">${c.done?'未処理に戻す':'処理済みにする'}</button>
+        <button class="mini-btn del-btn" onclick="removeClip('${c.id}')">削除</button>
+      </div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+async function aiFillFromImage(){
+  if(!aiImageData) return;
+  const statusEl = document.getElementById('aiStatus');
+  const btn = document.getElementById('aiImageFillBtn');
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  btn.textContent = '読み取り中...';
+  statusEl.innerHTML = '<span class="ai-status-loading">AIが画像を確認しています…（数十秒かかることがあります）</span>';
+
+  const prompt = `この画像はトレーディングカードの抽選販売に関する告知（ショップの案内やSNS投稿のスクリーンショット）です。内容を読み取り、次の情報を説明文や前置きを一切付けず、JSON形式のみで出力してください。
+
+{
+  "shop": "販売元の店舗名（分からなければ空文字）",
+  "boxNames": ["対象商品名1", "対象商品名2"],
+  "applyStartDate": "申込開始日をYYYY-MM-DD形式で（西暦が不明な場合は${new Date().getFullYear()}年として推定。分からなければ空文字）",
+  "applyStartTime": "申込開始時刻をHH:mm形式で（分かれば。分からなければ空文字）",
+  "deadline": "抽選応募の締切日をYYYY-MM-DD形式で（分からなければ空文字）",
+  "deadlineTime": "締切の時刻をHH:mm形式で（分かれば。分からなければ空文字）",
+  "memo": "抽選方式や注意事項の要約（100文字以内、分からなければ空文字）"
+}`;
+
+  const imageBlob = dataUrlToBlob(aiImageData);
+  if(!imageBlob){
+    statusEl.innerHTML = '<span class="ai-status-error">画像データの形式が不正です</span>';
+    btn.disabled = false; btn.textContent = originalText;
+    return;
+  }
+
+  try{
+    const sample = (typeof claude !== 'undefined' && claude.use) ? await claude.use('sample') : null;
+    if(!sample) throw { code: 'not_granted', message: 'sample機能が利用できません' };
+
+    const parsed = await sample.json(prompt, { images: imageBlob, modelTier: 'default' });
+
+    document.getElementById('upShop').value = parsed.shop || '';
+    document.getElementById('upDate').value = toDateTimeValue(parsed.applyStartDate, parsed.applyStartTime);
+    document.getElementById('upDeadline').value = toDateTimeValue(parsed.deadline, parsed.deadlineTime);
+    document.getElementById('upMemo').value = parsed.memo || '';
+
+    upBoxNameTags = Array.isArray(parsed.boxNames) ? parsed.boxNames.filter(n=>n && n.trim()) : [];
+    renderUpBoxNameTags();
+
+    statusEl.innerHTML = '<span class="ai-status-ok">✓ 下の「申込予定を登録」フォームに入力しました。内容を確認してから登録してください。</span>';
+  }catch(err){
+    const friendly = {
+      not_granted: 'この機能の利用が許可されていません（ページを開いた際の確認ダイアログで「許可」を選んでください）',
+      images_unavailable: 'この環境では画像を送信できません',
+      rate_limited: '混み合っています。少し時間をおいて再度お試しください',
+      invalid_json: '画像から情報をうまく読み取れませんでした'
+    }[err && err.code] || (err && err.message) || '不明なエラー';
+    statusEl.innerHTML = '<span class="ai-status-error">読み取りに失敗しました：' + escapeHtml(friendly) + '　お手数ですが手動で入力してください。</span>';
+  }finally{
+    btn.disabled = false;
+    btn.textContent = originalText;
+    aiImageData = null;
+    const label = document.getElementById('aiImageLabel');
+    if(label){ label.textContent = '🖼 画像を選択'; label.classList.remove('has-file'); }
+  }
+}
+
+async function aiFillFromUrl(){
+  const urlInput = document.getElementById('aiUrl');
+  const url = urlInput.value.trim();
+  const statusEl = document.getElementById('aiStatus');
+  const btn = document.getElementById('aiFillBtn');
+  if(!url){ statusEl.innerHTML = '<span class="ai-status-error">URLを入力してください</span>'; return; }
+
+  // このページ（公開されたアーティファクト）は、外部サイトのページ内容を
+  // 自動で取得する手段を持っていないため、URLからの自動読み取りは行えません。
+  // URLの入力欄はそのまま「申込予定」に登録する用途として使い、
+  // 内容の読み取りには画像（スクリーンショット）読み取り機能をご案内します。
+  document.getElementById('upUrl').value = url;
+  statusEl.innerHTML = '<span class="ai-status-error">この公開版ではURLからの自動読み取りに対応していません。お手数ですがページのスクリーンショットを撮って「🖼 画像を選択」から読み取るか、手動で入力してください（URLは入力欄に反映しました）。</span>';
+}
+
+function onUpTypeChange(){
+  const type = document.getElementById('upType').value;
+  const dateLabel = document.getElementById('upDateLabel');
+  const deadlineLabel = document.getElementById('upDeadlineLabel');
+  if(type === 'purchase'){
+    dateLabel.textContent = '購入（予約）開始予定日';
+    deadlineLabel.textContent = '購入受付終了日（任意）';
+  } else {
+    dateLabel.textContent = '申込開始予定日';
+    deadlineLabel.textContent = '抽選終了日（申込締切・任意）';
+  }
+}
+
+function clearUpcomingForm(){
+  document.getElementById('upShop').value = '';
+  document.getElementById('upBoxName').value = '';
+  document.getElementById('upType').value = 'lottery';
+  onUpTypeChange();
+  document.getElementById('upDate').value = '';
+  document.getElementById('upDeadline').value = '';
+  document.getElementById('upUrl').value = '';
+  document.getElementById('upMemo').value = '';
+  upBoxNameTags = [];
+  renderUpBoxNameTags();
+  const statusEl = document.getElementById('aiStatus');
+  if(statusEl) statusEl.innerHTML = '';
+}
+
+function addUpcoming(){
+  const shop = document.getElementById('upShop').value.trim();
+  const type = document.getElementById('upType').value;
+  const date = document.getElementById('upDate').value;
+  const deadline = document.getElementById('upDeadline').value;
+  const url = document.getElementById('upUrl').value.trim();
+  const memo = document.getElementById('upMemo').value.trim();
+  if(!shop || !date){ showMessage('店舗名と開始予定日は入力してください'); return; }
+
+  const leftover = document.getElementById('upBoxName').value.trim();
+  if(leftover && !upBoxNameTags.includes(leftover)) upBoxNameTags.push(leftover);
+  const boxNames = upBoxNameTags.length ? upBoxNameTags : [''];
+
+  boxNames.forEach(boxName=>{
+    data.upcoming.push({
+      id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      category: state.category, shop, boxName, type, date, deadline, url, memo
+    });
+  });
+
+  document.getElementById('upShop').value = '';
+  document.getElementById('upBoxName').value = '';
+  document.getElementById('upType').value = 'lottery';
+  onUpTypeChange();
+  document.getElementById('upDate').value = '';
+  document.getElementById('upDeadline').value = '';
+  document.getElementById('upUrl').value = '';
+  document.getElementById('upMemo').value = '';
+  upBoxNameTags = [];
+  save();
+  render();
+}
+
+function removeUpcoming(id, evt){
+  if(evt) evt.stopPropagation();
+  showConfirm('この申込予定を削除しますか？', ()=>{
+    data.upcoming = data.upcoming.filter(u=>u.id!==id);
+    save();
+    render();
+  });
+}
+
+function markUpcomingApplied(id, evt){
+  if(evt) evt.stopPropagation();
+  const u = data.upcoming.find(x=>x.id===id);
+  if(!u) return;
+  const boxName = u.boxName || u.shop;
+
+  let box = data.boxes.find(b=>b.category===u.category && b.name===boxName);
+  if(!box){
+    box = { id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8), category:u.category, name:boxName, thumbnail:null };
+    data.boxes.push(box);
+  }
+
+  data.entries.push({
+    id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+    boxId: box.id, shop:u.shop, type: u.type || 'lottery', date:'', status:'pending', url:u.url||'', memo:u.memo||''
+  });
+
+  data.upcoming = data.upcoming.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function renderUpcomingListHtml(){
+  const list = data.upcoming.filter(u=>u.category===state.category).sort((a,b)=>a.date.localeCompare(b.date));
+  if(list.length===0) return '<div class="empty" style="padding:20px; margin-top:14px;">まだ登録がありません。</div>';
+  return `<div class="shop-stats-list" style="margin-top:14px;">` + list.map(u=>{
+    const isPurchase = u.type === 'purchase';
+    const startLabel = isPurchase ? '購入開始予定' : '申込開始予定';
+    const endLabel = isPurchase ? '受付終了' : '締切';
+    const checkTitle = isPurchase ? 'チェックすると「未購入」としてBOXに登録されます' : 'チェックすると「申込済み(発表待ち)」としてBOXに登録されます';
+    return `
+    <div class="shop-stat-row">
+      <label class="upcoming-check">
+        <input type="checkbox" onclick="markUpcomingApplied('${u.id}', event)" title="${checkTitle}">
+        <div>
+          <div class="shop-stat-name">${escapeHtml(u.shop)}${u.boxName ? ' ・ '+escapeHtml(u.boxName) : ''} <span class="type-badge ${isPurchase?'type-purchase':'type-lottery'}">${isPurchase?'通常購入':'抽選'}</span></div>
+          <div class="shop-stat-detail">${startLabel}：${fmtDateTime(u.date)}${u.deadline ? ` ・ ${endLabel}：${fmtDateTime(u.deadline)}` : ''}${u.memo ? ' ・ '+escapeHtml(u.memo) : ''}</div>
+        </div>
+      </label>
+      <button class="box-del" style="position:static;" onclick="removeUpcoming('${u.id}', event)" title="削除">✕</button>
+    </div>
+  `;
+  }).join('') + `</div>`;
+}
+
+function renderTabs(){
+  const catTabsHtml = CATEGORIES.map(c=>{
+    const color = CATEGORY_COLORS[c] || 'var(--gold)';
+    const active = state.view !== 'shop-history' && c===state.category;
+    const style = active
+      ? `border-bottom-color:${color}; color:${color}; box-shadow:0 0 14px ${color}33;`
+      : `border-bottom-color:transparent;`;
+    return `<button class="cat-tab ${active?'active':''}" style="${style}" onclick="switchCategory('${escapeHtml(c)}')">${escapeHtml(c)}</button>`;
+  }).join('');
+
+  document.getElementById('catTabs').innerHTML = catTabsHtml;
+
+  const banner = document.getElementById('storeMapBanner');
+  if(banner) banner.classList.toggle('active', state.view === 'store-map');
+  const shopBanner = document.getElementById('shopHistoryBanner');
+  if(shopBanner) shopBanner.classList.toggle('active', state.view === 'shop-history');
+}
+
+function switchCategory(c){
+  state.category = c;
+  state.view = 'boxes';
+  state.boxId = null;
+  upBoxNameTags = [];
+  renderTabs();
+  render();
+}
+
+function viewShopHistory(){
+  state.view = 'shop-history';
+  state.boxId = null;
+  renderTabs();
+  render();
+}
+
+function viewStoreMap(){
+  state.view = 'store-map';
+  state.boxId = null;
+  renderTabs();
+  render();
+}
+
+function goBoxes(){
+  state.view = 'boxes';
+  state.boxId = null;
+  render();
+}
+
+function openBox(id){
+  state.view = 'box-detail';
+  state.boxId = id;
+  render();
+}
+
+function extractImageFromClipboard(e){
+  const items = (e.clipboardData || window.clipboardData)?.items;
+  if(!items) return null;
+  for(const item of items){
+    if(item.type && item.type.startsWith('image/')) return item.getAsFile();
+  }
+  return null;
+}
+
+async function handleThumbPaste(e, boxId){
+  const imageFile = extractImageFromClipboard(e);
+  e.preventDefault();
+  e.stopPropagation();
+  e.target.textContent = '';
+  if(!imageFile) return;
+  const box = data.boxes.find(b=>b.id===boxId);
+  if(!box) return;
+  try{
+    box.thumbnail = await resizeImageFile(imageFile);
+    save();
+    render();
+  }catch(err){
+    showMessage('画像の貼り付けに失敗しました');
+  }
+}
+
+function handleNewBoxPaste(e){
+  const imageFile = extractImageFromClipboard(e);
+  e.preventDefault();
+  e.stopPropagation();
+  e.target.textContent = '📋 右クリックで貼り付け';
+  if(!imageFile) return;
+  newBoxImageFile = imageFile;
+  const label = document.getElementById('newBoxImageLabel');
+  if(label){
+    label.textContent = '🖼 画像貼り付け済み';
+    label.classList.add('has-file');
+  }
+}
+
+function onNewBoxImageChange(){
+  const input = document.getElementById('newBoxImage');
+  const label = document.getElementById('newBoxImageLabel');
+  newBoxImageFile = input.files[0] || null;
+  label.textContent = newBoxImageFile ? '🖼 画像選択済み' : '🖼 画像を選択';
+  label.classList.toggle('has-file', !!newBoxImageFile);
+}
+
+async function addBox(){
+  const input = document.getElementById('newBoxName');
+  const name = input.value.trim();
+  if(!name){ showMessage('BOX名を入力してください'); return; }
+
+  if(!newBoxImageFile){
+    showMessage('サムネイル画像を選択してください（あとから見返す時の目印になるため必須にしています）');
+    return;
+  }
+
+  const priceInput = document.getElementById('newBoxPrice');
+  const priceVal = priceInput ? priceInput.value.trim() : '';
+  const price = priceVal === '' ? null : Number(priceVal);
+
+  const releaseDateInput = document.getElementById('newBoxReleaseDate');
+  const releaseDate = releaseDateInput ? releaseDateInput.value : '';
+
+  let thumbnail = null;
+  try{ thumbnail = await resizeImageFile(newBoxImageFile); }
+  catch(e){ showMessage('画像の読み込みに失敗しました。もう一度画像を選択してください'); return; }
+
+  data.boxes.push({ id: Date.now().toString(36)+Math.random().toString(36).slice(2,6), category: state.category, name, thumbnail, price, releaseDate });
+  input.value = '';
+  if(priceInput) priceInput.value = '';
+  if(releaseDateInput) releaseDateInput.value = '';
+  newBoxImageFile = null;
+  const label = document.getElementById('newBoxImageLabel');
+  if(label){ label.textContent = '🖼 画像を選択'; label.classList.remove('has-file'); }
+  save();
+  render();
+}
+
+function updateBoxName(id, value){
+  const box = data.boxes.find(b=>b.id===id);
+  if(!box) return;
+  const v = value.trim();
+  if(!v){ showMessage('BOX名を入力してください'); render(); return; }
+  box.name = v;
+  save();
+  render();
+}
+
+function updateBoxPrice(id, value){
+  const box = data.boxes.find(b=>b.id===id);
+  if(!box) return;
+  const v = value.trim();
+  box.price = v === '' ? null : Number(v);
+  save();
+  render();
+}
+
+function updateBoxReleaseDate(id, value){
+  const box = data.boxes.find(b=>b.id===id);
+  if(!box) return;
+  box.releaseDate = value;
+  save();
+  render();
+}
+
+function changeBoxSort(value){
+  state.boxSort = value;
+  renderBoxesView();
+}
+
+function setShopFilter(key){
+  state.shopFilter = key;
+  renderShopHistoryView();
+}
+
+function sortBoxesByRelease(boxes, direction){
+  const withDate = boxes.filter(b=>b.releaseDate);
+  const withoutDate = boxes.filter(b=>!b.releaseDate);
+  withDate.sort((a,b)=> direction==='desc'
+    ? b.releaseDate.localeCompare(a.releaseDate)
+    : a.releaseDate.localeCompare(b.releaseDate));
+  return [...withDate, ...withoutDate];
+}
+
+function openThumbPicker(id, evt){
+  evt.stopPropagation();
+  pendingThumbBoxId = id;
+  document.getElementById('boxThumbInput').click();
+}
+
+async function onThumbFileChange(){
+  const input = document.getElementById('boxThumbInput');
+  const file = input.files[0];
+  input.value = '';
+  if(!file || !pendingThumbBoxId) return;
+  const box = data.boxes.find(b=>b.id===pendingThumbBoxId);
+  if(!box) return;
+  try{
+    box.thumbnail = await resizeImageFile(file);
+    save();
+    render();
+  }catch(e){
+    showMessage('画像の読み込みに失敗しました');
+  }
+  pendingThumbBoxId = null;
+}
+
+function removeBox(id, evt){
+  evt.stopPropagation();
+  showConfirm('このBOXと紐づく抽選記録もすべて削除されます。よろしいですか？', ()=>{
+    data.boxes = data.boxes.filter(b=>b.id!==id);
+    data.entries = data.entries.filter(e=>e.boxId!==id);
+    save();
+    render();
+  });
+}
+
+function onInTypeChange(){
+  const type = document.getElementById('inType').value;
+  const dateLabel = document.getElementById('inDateLabel');
+  const statusLabelEl = document.getElementById('inStatusLabel');
+  const statusSelect = document.getElementById('inStatus');
+  const current = statusSelect.value;
+  if(type === 'purchase'){
+    dateLabel.textContent = '購入日';
+    statusLabelEl.textContent = '購入状況';
+    statusSelect.innerHTML = `
+      <option value="pending">未購入</option>
+      <option value="won">購入済み</option>
+    `;
+    statusSelect.value = current === 'lost' ? 'pending' : current;
+  } else {
+    dateLabel.textContent = '抽選発表日';
+    statusLabelEl.textContent = '当落';
+    statusSelect.innerHTML = `
+      <option value="pending">未発表</option>
+      <option value="won">当選</option>
+      <option value="lost">落選</option>
+    `;
+    statusSelect.value = current;
+  }
+}
+
+function addEntry(){
+  const shop = document.getElementById('inShop').value.trim();
+  const type = document.getElementById('inType').value;
+  const date = document.getElementById('inDate').value;
+  const status = document.getElementById('inStatus').value;
+  const url = document.getElementById('inUrl').value.trim();
+  const memo = document.getElementById('inMemo').value.trim();
+
+  if(!shop){
+    showMessage('店舗名を入力してください');
+    return;
+  }
+
+  data.entries.push({
+    id: Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+    boxId: state.boxId, shop, type, date, status, url, memo
+  });
+
+  document.getElementById('inShop').value='';
+  document.getElementById('inType').value='lottery';
+  onInTypeChange();
+  document.getElementById('inDate').value='';
+  document.getElementById('inStatus').value='pending';
+  document.getElementById('inUrl').value='';
+  document.getElementById('inMemo').value='';
+
+  save();
+  render();
+}
+
+function updateStatus(id, status){
+  const e = data.entries.find(x=>x.id===id);
+  if(e){ e.status = status; save(); render(); }
+}
+
+function updateEntryDate(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  e.date = value;
+  save();
+  renderEntryList();
+  renderUpcomingPanel();
+}
+
+function updateEntryShop(id, value){
+  const v = value.trim();
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  if(!v){ showMessage('ショップ名は空にできません'); render(); return; }
+  e.shop = v;
+  save();
+  render();
+}
+
+function updateEntryUrl(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  e.url = value.trim();
+  save();
+  renderEntryList();
+}
+
+function updateEntryMemo(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  e.memo = value.trim();
+  save();
+  renderEntryList();
+}
+
+function updateEntryType(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  if(value === 'purchase' && e.status === 'lost'){
+    // 通常購入には「落選」がないので、切り替え時は未購入扱いに戻す
+    e.status = 'pending';
+  }
+  e.type = value;
+  save();
+  render();
+}
+
+function updateEntryResalePrice(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  const v = value.trim();
+  e.resalePrice = v === '' ? null : Number(v);
+  save();
+  renderEntryList();
+}
+
+function updateEntryResaleDate(id, value){
+  const e = data.entries.find(x=>x.id===id);
+  if(!e) return;
+  e.resaleDate = value;
+  save();
+  renderEntryList();
+}
+
+function entryProfit(entry, box){
+  if(entry.resalePrice==null || !box || box.price==null) return null;
+  return entry.resalePrice - box.price;
+}
+
+function removeEntry(id){
+  showConfirm('この記録を削除しますか？', ()=>{
+    data.entries = data.entries.filter(x=>x.id!==id);
+    save();
+    render();
+  });
+}
+
+// datetime-local用の値（YYYY-MM-DDTHH:mm）と、日付のみ（YYYY-MM-DD）の両方を扱うためのヘルパー。
+// 既存データが日付のみで保存されている場合もそのまま表示・計算できるようにする。
+function fmtDateTime(v){
+  if(!v) return '';
+  if(v.length <= 10) return v; // 時刻情報がない古いデータ
+  const [d,t] = v.split('T');
+  return d + ' ' + (t||'').slice(0,5);
+}
+
+// AI読み取りなどで日付だけが分かっている場合に、時刻欄付きの入力へ流し込むための値を作る。
+// 時刻が不明な場合は 00:00 を仮でセットするので、ユーザーが分かる範囲で調整してもらう想定。
+function toDateTimeValue(dateOnly, timeOnly){
+  if(!dateOnly) return '';
+  return dateOnly + 'T' + (timeOnly && /^\d{2}:\d{2}$/.test(timeOnly) ? timeOnly : '00:00');
+}
+
+function daysUntil(dateStr){
+  const today = new Date(); today.setHours(0,0,0,0);
+  const datePart = (dateStr || '').slice(0,10);
+  const target = new Date(datePart + 'T00:00:00');
+  return Math.round((target - today) / 86400000);
+}
+
+function getUpcomingCombined(windowDays=3, overdueDays=14){
+  const announce = data.entries
+    .filter(e=> e.status==='pending' && e.date)
+    .map(e=>{
+      const box = data.boxes.find(b=>b.id===e.boxId);
+      return {
+        type:'announce', entryType: e.type || 'lottery', diff: daysUntil(e.date), date:e.date, shop:e.shop,
+        category: box ? box.category : state.category, boxName: box ? box.name : '',
+        boxId: e.boxId
+      };
+    });
+
+  const apply = data.upcoming
+    .filter(u=> u.date)
+    .map(u=>({
+      type:'apply', entryType: u.type || 'lottery', diff: daysUntil(u.date), date:u.date, shop:u.shop,
+      category:u.category, boxName:u.boxName, upcomingId:u.id
+    }));
+
+  const deadline = data.upcoming
+    .filter(u=> u.deadline)
+    .map(u=>({
+      type:'deadline', entryType: u.type || 'lottery', diff: daysUntil(u.deadline), date:u.deadline, shop:u.shop,
+      category:u.category, boxName:u.boxName, upcomingId:u.id
+    }));
+
+  return [...announce, ...apply, ...deadline]
+    .filter(x=> x.diff <= windowDays && x.diff >= -overdueDays)
+    .sort((a,b)=> a.diff - b.diff);
+}
+
+function whenLabel(diff){
+  if(diff < 0) return { text:`${Math.abs(diff)}日超過`, cls:'overdue' };
+  if(diff === 0) return { text:'本日', cls:'today' };
+  if(diff <= 3) return { text:`${diff}日後`, cls:'soon' };
+  return { text:`${diff}日後`, cls:'later' };
+}
+
+const UPCOMING_TYPE_LABEL = { announce:'発表', apply:'申込開始', deadline:'締切' };
+const UPCOMING_TYPE_LABEL_PURCHASE = { announce:'購入待ち', apply:'購入開始', deadline:'受付終了' };
+function upcomingTypeLabel(x){
+  return (x.entryType==='purchase' ? UPCOMING_TYPE_LABEL_PURCHASE : UPCOMING_TYPE_LABEL)[x.type];
+}
+
+function renderUpcomingPanel(){
+  const area = document.getElementById('upcomingArea');
+  const list = getUpcomingCombined();
+  if(list.length===0){ area.innerHTML=''; return; }
+
+  area.innerHTML = `
+    <div class="upcoming-panel">
+      <h2>まもなく発表・申込開始・締切</h2>
+      <div class="upcoming-list">
+        ${list.map(x=>{
+          const w = whenLabel(x.diff);
+          const typeTag = `<span class="upcoming-type ${x.type}">${upcomingTypeLabel(x)}</span>`;
+          const clickAction = x.type==='announce'
+            ? `switchCategory('${escapeHtml(x.category)}'); openBox('${x.boxId}')`
+            : `switchCategory('${escapeHtml(x.category)}')`;
+          return `
+            <div class="upcoming-row" onclick="${clickAction}">
+              <span class="upcoming-when ${w.cls}">${w.text}</span>
+              <div class="upcoming-info">
+                <div class="upcoming-shop">${typeTag} ${escapeHtml(x.shop)}</div>
+                <div class="upcoming-meta">${escapeHtml(x.category)} ${x.boxName ? '・ '+escapeHtml(x.boxName) : ''} ・ ${fmtDateTime(x.date)}</div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function render(){
+  renderUpcomingPanel();
+  if(state.view === 'shop-history'){ renderShopHistoryView(); }
+  else if(state.view === 'store-map'){ renderStoreMapView(); }
+  else if(state.view === 'boxes'){ renderBoxesView(); }
+  else { renderBoxDetailView(); }
+}
+
+function renderShopHistoryView(){
+  const enriched = data.entries.map(e=>{
+    const box = data.boxes.find(b=>b.id===e.boxId);
+    return { ...e, boxName: box ? box.name : '(削除済みBOX)', category: box ? box.category : '', box };
+  });
+
+  const shopMap = {};
+  enriched.forEach(e=>{
+    if(!e.shop) return;
+    if(!shopMap[e.shop]) shopMap[e.shop] = [];
+    shopMap[e.shop].push(e);
+  });
+
+  const shops = Object.keys(shopMap).map(shop=>{
+    const list = shopMap[shop];
+    const lotteryList = list.filter(e=>!isPurchaseType(e));
+    const purchaseList = list.filter(e=>isPurchaseType(e));
+    const won = lotteryList.filter(e=>e.status==='won').length;
+    const lost = lotteryList.filter(e=>e.status==='lost').length;
+    const pending = lotteryList.filter(e=>e.status==='pending').length;
+    const purchased = purchaseList.filter(e=>e.status==='won').length;
+    const notPurchased = purchaseList.length - purchased;
+    const rate = rateOf(list);
+    return { shop, tag: getShopTag(shop), list: list.sort((a,b)=> (b.date||'').localeCompare(a.date||'')), won, lost, pending, purchased, notPurchased, total: list.length, rate };
+  }).sort((a,b)=>{
+    if(a.rate===null && b.rate===null) return b.total-a.total;
+    if(a.rate===null) return 1;
+    if(b.rate===null) return -1;
+    return b.rate-a.rate;
+  });
+
+  const shopsShown = state.shopFilter==='all' ? shops
+    : state.shopFilter==='none' ? shops.filter(s=>!s.tag)
+    : shops.filter(s=>s.tag===state.shopFilter);
+
+  const totalEntries = enriched.length;
+  const overallRate = rateOf(enriched);
+
+  const categoryFinance = CATEGORIES.map(cat=>{
+    const wonEntries = enriched.filter(e=> e.category===cat && e.status==='won');
+    const invested = wonEntries.reduce((sum,e)=> sum + (e.box && e.box.price!=null ? e.box.price : 0), 0);
+    const investedCount = wonEntries.filter(e=> e.box && e.box.price!=null).length;
+    const soldEntries = wonEntries.filter(e=> e.resalePrice!=null);
+    const resold = soldEntries.reduce((sum,e)=> sum + e.resalePrice, 0);
+    const profits = soldEntries.map(e=> entryProfit(e, e.box)).filter(p=>p!=null);
+    const profit = profits.length ? profits.reduce((a,b)=>a+b,0) : null;
+    return { category:cat, invested, investedCount, resold, soldCount:soldEntries.length, heldCount: wonEntries.length - soldEntries.length, profit };
+  }).filter(c=> c.investedCount>0 || c.soldCount>0);
+
+  const shopFilterTabs = [
+    { key:'all', label:'すべて' },
+    { key:'実店舗', label:'実店舗' },
+    { key:'オンライン', label:'オンライン' },
+    { key:'none', label:'未設定' }
+  ];
+
+  let leftHtml = `
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">登録店舗数</div>
+        <div class="stat-value">${shops.length}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">総エントリー数（全カテゴリ）</div>
+        <div class="stat-value">${totalEntries}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">全体勝率</div>
+        <div class="stat-value gold">${overallRate!==null ? overallRate+'%' : '—'}</div>
+      </div>
+    </div>
+  `;
+
+  if(shops.length>0){
+    leftHtml += `<div class="shop-filter-tabs">` + shopFilterTabs.map(t=>
+      `<button class="shop-filter-tab ${state.shopFilter===t.key?'active':''}" onclick="setShopFilter('${t.key}')">${t.label}</button>`
+    ).join('') + `</div>`;
+  }
+
+  if(shops.length===0){
+    leftHtml += `<div class="empty">まだ抽選記録がありません。</div>`;
+  }else if(shopsShown.length===0){
+    leftHtml += `<div class="empty">該当する店舗がありません。</div>`;
+  }else{
+    leftHtml += shopsShown.map(s=>{
+      const shopSafe = escapeHtml(s.shop);
+      const inputId = 'shopNameEdit-' + s.shop.replace(/[^a-zA-Z0-9]/g,'').slice(0,20) + '-' + Math.abs([...s.shop].reduce((h,c)=>h*31+c.charCodeAt(0)|0,0));
+      return `
+      <details class="panel shop-stats-panel">
+        <summary>
+          <span>${shopSafe}</span>
+          ${s.tag ? `<span class="shop-tag-chip ${s.tag==='実店舗'?'tag-real':'tag-online'}">${s.tag}</span>` : ''}
+          <span style="margin-left:auto; margin-right:10px; font-family:var(--mono); font-weight:800; font-size:14px; color:${s.rate!==null?'var(--win)':'var(--muted)'};">${s.rate!==null ? s.rate+'%' : '—'}</span>
+        </summary>
+        <div class="shop-stats-body">
+          <div class="shop-edit-row">
+            <div class="suggest-wrap" style="flex:1; min-width:140px;">
+              <input type="text" id="${inputId}" data-shop="${shopSafe}" value="${shopSafe}" placeholder="店舗名"
+                onclick="event.stopPropagation()"
+                oninput="showSuggest('${inputId}','shop')" onfocus="this.select(); showSuggest('${inputId}','shop',true)" onblur="hideSuggestDelayed('${inputId}')"
+                onchange="renameShop(this.dataset.shop, this.value)">
+              <div class="suggest-dropdown" id="${inputId}-suggest" onmousedown="event.stopPropagation(); handleSuggestMousedown(event,'${inputId}')"></div>
+            </div>
+            <select data-shop="${shopSafe}" onclick="event.stopPropagation()" onchange="setShopTag(this.dataset.shop, this.value)">
+              <option value="" ${!s.tag?'selected':''}>タグ未設定</option>
+              <option value="実店舗" ${s.tag==='実店舗'?'selected':''}>実店舗</option>
+              <option value="オンライン" ${s.tag==='オンライン'?'selected':''}>オンライン</option>
+            </select>
+          </div>
+          <div class="shop-stat-detail" style="margin-bottom:10px;">当選 ${s.won} / 落選 ${s.lost}${s.pending?` / 未発表 ${s.pending}`:''}${(s.purchased||s.notPurchased)?` ・ 購入済み ${s.purchased} / 未購入 ${s.notPurchased}`:''}（計${s.total}件）</div>
+          <div class="history-list">
+            ${s.list.map(e=>{
+              const color = CATEGORY_COLORS[e.category] || 'var(--muted)';
+              return `
+                <div class="history-row" onclick="viewShopHistoryOpenBox('${e.boxId}')">
+                  <div class="history-row-top">
+                    <span class="history-cat-chip" style="color:${color}; border-color:${color};">${escapeHtml(e.category)}</span>
+                    <span class="history-box">${escapeHtml(e.boxName)}</span>
+                  </div>
+                  <div class="history-row-bottom">
+                    <span class="history-date">${e.date ? fmtDateTime(e.date) : '未設定'}</span>
+                    <span class="status-tag ${statusClass(e.status, e.type)}">${statusLabel(e.status, e.type)}</span>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+      </details>
+    `;
+    }).join('');
+  }
+
+  const rightHtml = `
+    <div class="panel finance-panel">
+      <h2>カテゴリ別 投資額・売却額</h2>
+      ${categoryFinance.length===0 ? `<div class="empty" style="padding:24px 14px;">まだ当選・売却の記録がありません。</div>` : categoryFinance.map(c=>{
+        const color = CATEGORY_COLORS[c.category] || 'var(--gold)';
+        return `
+          <div class="category-finance-row">
+            <div class="category-finance-name"><span class="dot" style="background:${color};"></span>${escapeHtml(c.category)}</div>
+            <div class="category-finance-line"><span>累計投資額（${c.investedCount}個）</span><b>¥${c.invested.toLocaleString()}</b></div>
+            <div class="category-finance-line"><span>累計売却額（${c.soldCount}個）</span><b>¥${c.resold.toLocaleString()}</b></div>
+            <div class="category-finance-line"><span>保有中</span><b>${c.heldCount}個</b></div>
+            <div class="category-finance-profit" style="color:${c.profit===null?'var(--muted)':c.profit>=0?'var(--win)':'var(--lose)'}">
+              損益：${c.profit===null ? '—' : (c.profit>=0?'+':'')+'¥'+c.profit.toLocaleString()}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+
+  const html = `
+    <div class="shop-history-layout">
+      <div class="shop-history-main">${leftHtml}</div>
+      <div class="shop-history-side">${rightHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('mainArea').innerHTML = html;
+}
+
+// ===== 店舗情報機能（旧：店舗マップ） =====
+// コンビニ・量販店の「発売日に売っているか」「購入制限」「再販情報」を、
+// 店舗ごとに日付つきの記録として積み重ねて管理する。
+// 補足：この公開ページは外部の地図サービス（Googleマップ／OpenStreetMapなど）から
+// 地図の画像を読み込むことができない環境のため、地図を画面に表示する代わりに
+// 「現在地からの距離が近い順のリスト」＋「地図アプリを開くリンク」という形にしている。
+
+const MAP_AREAS = {
+  fuji: { label: '富士市' },
+  shizuoka: { label: '静岡駅北口〜伊勢丹' }
+};
+
+let userPos = null; // { lat, lng } … 直近で取得できた現在地（距離の並べ替え用）
+let pendingStorePin = null; // { lat, lng } | null … 「現在地に店舗を追加」で使う位置情報
+
+const CHAIN_SUGGESTIONS = [
+  'セブンイレブン','ローソン','ファミリーマート','ミニストップ','セイコーマート','デイリーヤマザキ','ポプラ',
+  'イオン','イトーヨーカドー','ドン・キホーテ','ヨドバシカメラ','ビックカメラ','ヤマダデンキ','エディオン',
+  'TSUTAYA','GEO','その他'
+];
+
+function storeDisplayName(s){
+  const chain = s.chain || s.name || '（チェーン未設定）';
+  return s.branchName ? `${chain} ${s.branchName}` : chain;
+}
+
+function statusColor(v){
+  return v==='yes' ? '#7ad98c' : v==='no' ? '#e5484d' : '#8a8fb0';
+}
+function statusLabelText(v){
+  return v==='yes' ? 'あり' : v==='no' ? 'なし' : '不明';
+}
+
+function distanceKm(lat1, lng1, lat2, lng2){
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI/180;
+  const dLng = (lng2-lng1) * Math.PI/180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function mapsLink(s){
+  if(s.lat!=null && s.lng!=null){
+    return `https://www.google.com/maps/search/?api=1&query=${s.lat},${s.lng}`;
+  }
+  const q = [storeDisplayName(s), s.address].filter(Boolean).join(' ');
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
+
+function latestRecord(s){
+  const list = (s.records||[]).slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+  return list[0] || null;
+}
+
+function getCurrentPosition(){
+  return new Promise((resolve, reject)=>{
+    if(!navigator.geolocation){ reject(new Error('このブラウザは現在地取得に対応していません')); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos)=> resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      (err)=> reject(err),
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+function sortByDistanceClicked(){
+  showMessage('現在地を取得しています…');
+  getCurrentPosition().then(pos=>{
+    userPos = pos;
+    closeConfirm();
+    render();
+  }).catch(()=>{
+    showMessage('現在地を取得できませんでした。位置情報の利用を許可しているかご確認ください。');
+  });
+}
+
+function addStoreAtCurrentLocation(){
+  showMessage('現在地を取得しています…');
+  getCurrentPosition().then(pos=>{
+    closeConfirm();
+    pendingStorePin = { lat: pos.lat, lng: pos.lng };
+    userPos = pos;
+    openStoreEditor(null);
+  }).catch(()=>{
+    showMessage('現在地を取得できませんでした。位置情報の利用を許可しているかご確認ください。');
+  });
+}
+
+function addStoreManually(){
+  pendingStorePin = null;
+  openStoreEditor(null);
+}
+
+function toggleChainFilter(chain){
+  if(state.hiddenChains.has(chain)) state.hiddenChains.delete(chain);
+  else state.hiddenChains.add(chain);
+  render();
+}
+
+function resetChainFilter(){
+  state.hiddenChains.clear();
+  render();
+}
+
+function switchMapArea(key){
+  state.mapArea = key;
+  render();
+}
+
+function renderStoreMapView(){
+  const stores = data.stores.filter(s=>s.area===state.mapArea);
+  const visibleStores = stores.filter(s=>!state.hiddenChains.has(s.chain || s.name));
+
+  const areaButtons = Object.keys(MAP_AREAS).map(key=>{
+    const active = state.mapArea === key;
+    const style = active ? 'color:var(--win); border-color:var(--win); box-shadow:0 0 10px rgba(122,217,140,0.25);' : '';
+    return `<button class="mini-btn" style="${style}" onclick="switchMapArea('${key}')">${MAP_AREAS[key].label}</button>`;
+  }).join('');
+
+  const chainCounts = {};
+  stores.forEach(s=>{ const c = s.chain || s.name || 'その他'; chainCounts[c] = (chainCounts[c]||0)+1; });
+  const chainNames = Object.keys(chainCounts).sort((a,b)=>a.localeCompare(b,'ja'));
+  const chainFilterHtml = chainNames.length===0 ? '' : `
+    <div class="chain-filter-row">
+      ${chainNames.map(c=>{
+        const hidden = state.hiddenChains.has(c);
+        return `<button class="chain-filter-chip ${hidden?'off':''}" onclick="toggleChainFilter('${escapeHtml(c).replace(/'/g,"\\'")}')">${escapeHtml(c)} (${chainCounts[c]})</button>`;
+      }).join('')}
+      ${state.hiddenChains.size > 0 ? `<button class="chain-filter-chip reset" onclick="resetChainFilter()">すべて表示</button>` : ''}
+    </div>
+  `;
+
+  const html = `
+    <div class="panel">
+      <h2>🏪 店舗情報</h2>
+      <div class="add-box-hint" style="margin-top:-6px; margin-bottom:12px;">
+        コンビニ・量販店の「発売日販売」「購入制限」「再販情報」を、日付ごとの記録として貯めていけます。
+        地図の画像はこのページでは表示できないため一覧形式にしていますが、位置情報のある店舗は地図アプリで開けます。
+      </div>
+      <div class="add-box-row" style="margin-bottom:10px;">
+        ${areaButtons}
+        <span style="flex:1;"></span>
+        <button class="mini-btn" onclick="sortByDistanceClicked()">📍 現在地から近い順</button>
+        <button class="mini-btn" style="color:var(--win); border-color:var(--win);" onclick="addStoreAtCurrentLocation()">＋ 現在地に店舗を追加</button>
+        <button class="mini-btn" onclick="addStoreManually()">＋ 店舗名で追加</button>
+      </div>
+
+      ${chainFilterHtml}
+
+      <div id="storeListArea"></div>
+    </div>
+  `;
+  document.getElementById('mainArea').innerHTML = html;
+  renderStoreList(visibleStores);
+}
+
+function renderStoreList(stores){
+  const area = document.getElementById('storeListArea');
+  if(!area) return;
+  if(stores.length===0){
+    area.innerHTML = '<div class="empty" style="padding:20px;">まだ登録された店舗がありません（フィルターで全部隠れている可能性もあります）。上のボタンから追加してください。</div>';
+    return;
+  }
+  const withDist = stores.map(s=>{
+    const dist = (userPos && s.lat!=null && s.lng!=null) ? distanceKm(userPos.lat, userPos.lng, s.lat, s.lng) : null;
+    return { s, dist };
+  });
+  withDist.sort((a,b)=>{
+    if(a.dist!=null && b.dist!=null) return a.dist - b.dist;
+    if(a.dist!=null) return -1;
+    if(b.dist!=null) return 1;
+    return (a.s.seq||0)-(b.s.seq||0);
+  });
+
+  area.innerHTML = `<div class="clip-grid" style="grid-template-columns:repeat(auto-fill, minmax(230px,1fr));">` + withDist.map(({s,dist})=>{
+    const latest = latestRecord(s);
+    const history = (s.records||[]).slice().sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+    const historyRest = history.slice(1);
+    return `
+    <div class="clip-card">
+      <div class="clip-body" style="padding:10px 11px;">
+        <div style="font-family:var(--display); font-weight:700; font-size:13px; margin-bottom:4px; display:flex; align-items:center; gap:6px;">
+          <span style="color:var(--muted); font-family:var(--mono); font-weight:800;">#${s.seq!=null?s.seq:''}</span>
+          <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(storeDisplayName(s))}</span>
+        </div>
+        ${dist!=null ? `<div style="font-size:11px; color:var(--muted); font-family:var(--mono); margin-bottom:6px;">現在地から約${dist<1 ? Math.round(dist*1000)+'m' : dist.toFixed(1)+'km'}</div>` : (s.address ? `<div style="font-size:11px; color:var(--muted); margin-bottom:6px;">${escapeHtml(s.address)}</div>` : '')}
+        ${latest ? `
+          <div style="font-size:10.5px; color:var(--muted); margin-bottom:4px;">最新記録：${escapeHtml(latest.date||'')}</div>
+          <div style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:6px;">
+            <span class="type-badge" style="background:${statusColor(latest.releaseDay)}33; color:${statusColor(latest.releaseDay)}; border:1px solid ${statusColor(latest.releaseDay)}66;">発売日${statusLabelText(latest.releaseDay)}</span>
+            <span class="type-badge" style="background:${statusColor(latest.purchaseLimit)}33; color:${statusColor(latest.purchaseLimit)}; border:1px solid ${statusColor(latest.purchaseLimit)}66;">制限${statusLabelText(latest.purchaseLimit)}</span>
+            <span class="type-badge" style="background:${statusColor(latest.restock)}33; color:${statusColor(latest.restock)}; border:1px solid ${statusColor(latest.restock)}66;">再販${statusLabelText(latest.restock)}</span>
+          </div>
+          ${latest.memo ? `<div class="clip-memo">${escapeHtml(latest.memo)}</div>` : ''}
+        ` : `<div class="empty" style="padding:8px 0; font-size:11.5px;">まだ記録がありません</div>`}
+        ${historyRest.length>0 ? `
+          <details style="margin-top:6px;">
+            <summary style="cursor:pointer; font-size:11px; color:var(--gold);">過去の記録（${historyRest.length}件）を見る</summary>
+            <div style="margin-top:6px; display:flex; flex-direction:column; gap:6px;">
+              ${historyRest.map(r=>`
+                <div style="border-top:1px dashed var(--border); padding-top:6px; font-size:10.5px; color:var(--muted);">
+                  <div style="margin-bottom:3px;">${escapeHtml(r.date||'')}</div>
+                  <div>発売日${statusLabelText(r.releaseDay)}／制限${statusLabelText(r.purchaseLimit)}／再販${statusLabelText(r.restock)}</div>
+                  ${r.memo ? `<div>${escapeHtml(r.memo)}</div>` : ''}
+                  <button class="mini-btn del-btn" style="margin-top:4px;" onclick="deleteStoreRecord('${s.id}','${r.id}')">この記録を削除</button>
+                </div>
+              `).join('')}
+            </div>
+          </details>
+        ` : ''}
+      </div>
+      <div class="clip-actions">
+        <a class="mini-btn" href="${mapsLink(s)}" target="_blank" rel="noopener" style="text-decoration:none; display:inline-flex; align-items:center;">地図アプリで開く</a>
+        <button class="mini-btn" onclick="openStoreRecordEditor('${s.id}')">記録を追加</button>
+        <button class="mini-btn" onclick="openStoreEditor('${s.id}')">基本情報を編集</button>
+      </div>
+    </div>
+  `;
+  }).join('') + `</div>`;
+}
+
+function openStoreEditor(id){
+  const s = id ? data.stores.find(x=>x.id===id) : null;
+  const isNew = !s;
+  const lat = s ? s.lat : (pendingStorePin ? pendingStorePin.lat : null);
+  const lng = s ? s.lng : (pendingStorePin ? pendingStorePin.lng : null);
+
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this){ pendingStorePin=null; closeConfirm(); }">
+      <div class="breakdown-box" style="max-width:420px; overflow-y:auto;">
+        <h3 class="breakdown-title">🏪 ${isNew ? '店舗を追加' : '店舗の基本情報を編集'}${!isNew && s.seq!=null ? ` <span style="color:var(--muted); font-family:var(--mono); font-size:11px;">#${s.seq}</span>` : ''}</h3>
+        <div class="form-grid" style="grid-template-columns:1fr; gap:10px; margin-bottom:14px;">
+          <div>
+            <label>チェーン名（大分類）</label>
+            <input id="storeEditChain" type="text" list="chainSuggestList" placeholder="例：セブンイレブン" value="${s ? escapeHtml(s.chain || s.name || '') : ''}">
+            <datalist id="chainSuggestList">
+              ${CHAIN_SUGGESTIONS.map(c=>`<option value="${escapeHtml(c)}">`).join('')}
+            </datalist>
+          </div>
+          <div>
+            <label>支店名（任意）</label>
+            <input id="storeEditBranch" type="text" placeholder="例：富士駅前店" value="${s ? escapeHtml(s.branchName || '') : ''}">
+          </div>
+          <div>
+            <label>住所・目印など（任意）</label>
+            <input id="storeEditAddress" type="text" placeholder="例：富士市〇〇町1-2-3" value="${s ? escapeHtml(s.address || '') : ''}">
+          </div>
+          <div class="add-box-hint" style="margin:0;">
+            ${lat!=null && lng!=null ? '📍 現在地の位置情報が登録されます（地図アプリで正確な場所を開けます）' : '位置情報なしで登録します。「地図アプリで開く」は店名・住所での検索になります。'}
+          </div>
+        </div>
+        <div class="confirm-actions" style="justify-content:space-between;">
+          ${!isNew ? `<button class="btn-danger" onclick="deleteStore('${s.id}')">削除する</button>` : `<span></span>`}
+          <div style="display:flex; gap:8px;">
+            <button class="btn-ghost" onclick="pendingStorePin=null; closeConfirm();">キャンセル</button>
+            <button class="btn-primary" onclick="saveStoreEditor('${isNew ? '' : s.id}', ${lat}, ${lng})">保存する</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveStoreEditor(id, lat, lng){
+  const chain = document.getElementById('storeEditChain').value.trim();
+  const branchName = document.getElementById('storeEditBranch').value.trim();
+  const address = document.getElementById('storeEditAddress').value.trim();
+  if(!chain){ showMessage('チェーン名を入力してください'); return; }
+
+  const hasPos = lat!=null && lng!=null && !isNaN(lat) && !isNaN(lng);
+
+  if(id){
+    const s = data.stores.find(x=>x.id===id);
+    if(s) Object.assign(s, { chain, branchName, address });
+  }else{
+    data.storeSeqCounter = (data.storeSeqCounter || 0) + 1;
+    data.stores.push({
+      id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+      area: state.mapArea, chain, branchName, address,
+      lat: hasPos ? lat : null, lng: hasPos ? lng : null,
+      seq: data.storeSeqCounter, records: []
+    });
+  }
+  pendingStorePin = null;
+  save();
+  closeConfirm();
+  render();
+}
+
+function deleteStore(id){
+  data.stores = data.stores.filter(x=>x.id!==id);
+  pendingStorePin = null;
+  save();
+  closeConfirm();
+  render();
+}
+
+function openStoreRecordEditor(storeId){
+  const s = data.stores.find(x=>x.id===storeId);
+  if(!s) return;
+  const today = new Date().toISOString().slice(0,10);
+
+  const selectOptions = (val) => `
+    <option value="unknown" ${val==='unknown'||!val?'selected':''}>不明</option>
+    <option value="yes" ${val==='yes'?'selected':''}>あり</option>
+    <option value="no" ${val==='no'?'selected':''}>なし</option>
+  `;
+
+  document.getElementById('confirmArea').innerHTML = `
+    <div class="confirm-overlay" onclick="if(event.target===this) closeConfirm();">
+      <div class="breakdown-box" style="max-width:420px; overflow-y:auto;">
+        <h3 class="breakdown-title">📝 ${escapeHtml(storeDisplayName(s))} の記録を追加</h3>
+        <div class="form-grid" style="grid-template-columns:1fr; gap:10px; margin-bottom:14px;">
+          <div>
+            <label>日付</label>
+            <input id="recEditDate" type="date" value="${today}">
+          </div>
+          <div>
+            <label>発売日に販売あるか</label>
+            <select id="recEditReleaseDay">${selectOptions('unknown')}</select>
+          </div>
+          <div>
+            <label>購入制限</label>
+            <select id="recEditLimit">${selectOptions('unknown')}</select>
+            <input id="recEditLimitDetail" type="text" placeholder="制限の内容（例：1人1点まで）" style="margin-top:6px;">
+          </div>
+          <div>
+            <label>再販情報</label>
+            <select id="recEditRestock">${selectOptions('unknown')}</select>
+            <input id="recEditRestockDetail" type="text" placeholder="例：9/20 再販あり" style="margin-top:6px;">
+          </div>
+          <div>
+            <label>メモ（任意）</label>
+            <input id="recEditMemo" type="text" placeholder="レジ横に並ぶ、開店30分前から列など">
+          </div>
+        </div>
+        <div class="confirm-actions">
+          <button class="btn-ghost" onclick="closeConfirm()">キャンセル</button>
+          <button class="btn-primary" onclick="saveStoreRecord('${s.id}')">記録を追加する</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function saveStoreRecord(storeId){
+  const s = data.stores.find(x=>x.id===storeId);
+  if(!s) return;
+  const date = document.getElementById('recEditDate').value || new Date().toISOString().slice(0,10);
+  if(!s.records) s.records = [];
+  s.records.push({
+    id: Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8),
+    date,
+    releaseDay: document.getElementById('recEditReleaseDay').value,
+    purchaseLimit: document.getElementById('recEditLimit').value,
+    limitDetail: document.getElementById('recEditLimitDetail').value.trim(),
+    restock: document.getElementById('recEditRestock').value,
+    restockDetail: document.getElementById('recEditRestockDetail').value.trim(),
+    memo: document.getElementById('recEditMemo').value.trim(),
+    createdAt: new Date().toISOString()
+  });
+  save();
+  closeConfirm();
+  render();
+}
+
+function deleteStoreRecord(storeId, recordId){
+  const s = data.stores.find(x=>x.id===storeId);
+  if(!s) return;
+  s.records = (s.records||[]).filter(r=>r.id!==recordId);
+  save();
+  render();
+}
+
+function viewShopHistoryOpenBox(boxId){
+  const box = data.boxes.find(b=>b.id===boxId);
+  if(!box) return;
+  state.category = box.category;
+  state.view = 'box-detail';
+  state.boxId = boxId;
+  renderTabs();
+  render();
+}
+
+function renderBoxesView(){
+  const boxes = data.boxes.filter(b=>b.category===state.category);
+  const catEntries = data.entries.filter(e=> boxes.some(b=>b.id===e.boxId) );
+  const lotteryEntries = catEntries.filter(e=>!isPurchaseType(e));
+  const purchaseEntries = catEntries.filter(e=>isPurchaseType(e));
+  const won = lotteryEntries.filter(e=>e.status==='won').length;
+  const lost = lotteryEntries.filter(e=>e.status==='lost').length;
+  const pending = lotteryEntries.filter(e=>e.status==='pending').length;
+  const rate = rateOf(catEntries);
+  const purchased = purchaseEntries.filter(e=>e.status==='won').length;
+  const notPurchased = purchaseEntries.length - purchased;
+
+  let html = `
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-label">${escapeHtml(state.category)} 総合勝率（抽選のみ）</div>
+        <div class="stat-value gold">${rate!==null ? rate+'%' : '—'}</div>
+      </div>
+      <div class="stat-card clickable" onclick="showWinLossBreakdown()">
+        <div class="stat-label">当選 / 落選</div>
+        <div class="stat-value win">${won}<span style="color:var(--muted);font-size:14px;"> / ${lost}</span></div>
+      </div>
+      <div class="stat-card clickable" onclick="showPendingBreakdown()">
+        <div class="stat-label">結果待ち</div>
+        <div class="stat-value">${pending}</div>
+      </div>
+      <div class="stat-card clickable" onclick="showBoxCountBreakdown()">
+        <div class="stat-label">登録BOX数</div>
+        <div class="stat-value">${boxes.length}</div>
+      </div>
+      ${purchaseEntries.length ? `
+      <div class="stat-card clickable" onclick="showPurchaseBreakdown()">
+        <div class="stat-label">通常購入：購入済み / 未購入</div>
+        <div class="stat-value win">${purchased}<span style="color:var(--muted);font-size:14px;"> / ${notPurchased}</span></div>
+      </div>
+      ` : ''}
+    </div>
+
+    <details class="panel shop-stats-panel">
+      <summary>${escapeHtml(state.category)} 店舗別勝率</summary>
+      <div class="shop-stats-body">${renderShopStatsHtml(catEntries, 'まだ抽選記録がありません。')}</div>
+    </details>
+
+    <div class="panel ai-panel">
+      <h2>🤖 AIでURL・画像から自動入力</h2>
+      <div class="add-box-row">
+        <input id="aiUrl" type="text" placeholder="抽選告知ページのURLを貼り付け" style="flex:1;">
+        <button class="btn-primary" id="aiFillBtn" onclick="aiFillFromUrl()">URLから読み取る</button>
+      </div>
+      <div class="ai-divider">または画面のスクリーンショットから</div>
+      <div class="add-box-row">
+        <label class="file-btn" id="aiImageLabel" for="aiImageFile" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択</label>
+        <input id="aiImageFile" type="file" accept="image/*" style="display:none" onchange="onAiImageFileChange()">
+        <span class="file-btn" contenteditable="true" tabindex="-1" spellcheck="false"
+          onpaste="handleAiImagePaste(event)"
+          onkeydown="if(!(event.ctrlKey||event.metaKey)) event.preventDefault();"
+          oninput="event.target.textContent='';"
+          title="ここを右クリック→貼り付け、またはCtrl+Vで画像を読み込めます">📋 右クリックで貼り付け</span>
+        <button class="btn-primary" id="aiImageFillBtn" onclick="aiFillFromImage()" disabled>画像から読み取る</button>
+      </div>
+      <div id="aiStatus" class="ai-status"></div>
+      <div class="add-box-hint">読み取った内容は自動登録されず、下の「申込予定を登録」フォームに入力されるだけです。内容を必ず確認してから「登録する」を押してください。サイトや画像によってはうまく読み取れないことがあります。</div>
+    </div>
+
+    <div class="panel">
+      <h2>申込予定を登録</h2>
+      <div class="form-grid">
+        <div>
+          <label>店舗名</label>
+          <div class="suggest-wrap">
+            <input id="upShop" placeholder="例：〇〇カードショップ 渋谷店" autocomplete="off"
+              oninput="showSuggest('upShop','shop')" onfocus="this.select(); showSuggest('upShop','shop',true)" onblur="hideSuggestDelayed('upShop')">
+            <div class="suggest-dropdown" id="upShop-suggest" onmousedown="handleSuggestMousedown(event,'upShop')"></div>
+          </div>
+        </div>
+        <div>
+          <label>予定BOX名（任意・複数可）</label>
+          <div style="display:flex; gap:6px;">
+            <div class="suggest-wrap" style="flex:1;">
+              <input id="upBoxName" placeholder="入力してEnterまたは追加" autocomplete="off"
+                oninput="showSuggest('upBoxName','boxName')" onfocus="this.select(); showSuggest('upBoxName','boxName',true)" onblur="hideSuggestDelayed('upBoxName')"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();addUpBoxNameTag();}">
+              <div class="suggest-dropdown" id="upBoxName-suggest" onmousedown="handleSuggestMousedown(event,'upBoxName')"></div>
+            </div>
+            <button type="button" class="btn-ghost" style="flex:none; padding:9px 14px;" onclick="addUpBoxNameTag()">追加</button>
+          </div>
+          <div id="upBoxNameTags" class="tag-list"></div>
+        </div>
+        <div>
+          <label>種別</label>
+          <select id="upType" onchange="onUpTypeChange()">
+            <option value="lottery">抽選</option>
+            <option value="purchase">通常購入</option>
+          </select>
+        </div>
+        <div>
+          <label id="upDateLabel">申込開始予定日</label>
+          <input id="upDate" type="datetime-local">
+        </div>
+        <div>
+          <label id="upDeadlineLabel">抽選終了日（申込締切・任意）</label>
+          <input id="upDeadline" type="datetime-local">
+        </div>
+        <div>
+          <label>URL（任意）</label>
+          <input id="upUrl" placeholder="https://...">
+        </div>
+        <div class="full">
+          <label>メモ（任意）</label>
+          <input id="upMemo" placeholder="抽選方式・注意事項など">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" onclick="addUpcoming()">登録する</button>
+        <button class="btn-ghost" onclick="clearUpcomingForm()">結果をクリア</button>
+      </div>
+      ${renderUpcomingListHtml()}
+    </div>
+
+    <div class="panel clip-panel">
+      <h2>📌 画像・URLメモ</h2>
+      <div class="add-box-hint" style="margin-top:-6px; margin-bottom:12px;">抽選ページのスクショやXの投稿URLなど、忘れそうなものをカテゴリごとに保存しておけます。BOXへの登録は不要です。</div>
+      <div class="add-box-row">
+        <label class="file-btn" id="clipImageLabel" for="clipImageFile" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択</label>
+        <input id="clipImageFile" type="file" accept="image/*" style="display:none" onchange="onClipFileChange()">
+        <span class="file-btn" contenteditable="true" tabindex="-1" spellcheck="false"
+          onpaste="handleClipImagePaste(event)"
+          onkeydown="if(!(event.ctrlKey||event.metaKey)) event.preventDefault();"
+          oninput="event.target.textContent='';"
+          title="ここを右クリック→貼り付け、またはCtrl+Vで画像を貼り付けられます">📋 右クリックで貼り付け</span>
+        <input id="clipUrl" type="text" placeholder="URL（任意・Xの投稿など）" style="flex:1; min-width:180px;">
+      </div>
+      <div class="add-box-row" style="margin-top:8px;">
+        <input id="clipMemo" type="text" placeholder="メモ（任意）" style="flex:1;">
+        <button class="btn-primary" onclick="addClip()">保存する</button>
+      </div>
+      ${renderClipGrid()}
+    </div>
+
+    <div class="panel">
+      <h2>BOXを追加</h2>
+      <div class="add-box-row">
+        <div class="suggest-wrap" style="flex:1; min-width:180px;">
+          <input id="newBoxName" type="text" placeholder="例：ストームエメラルダ、ムニキスゼロ 等"
+            oninput="showSuggest('newBoxName','newBoxCandidate')" onfocus="this.select(); showSuggest('newBoxName','newBoxCandidate',true)" onblur="hideSuggestDelayed('newBoxName')"
+            onkeydown="if(event.key==='Enter')addBox()">
+          <div class="suggest-dropdown" id="newBoxName-suggest" onmousedown="handleSuggestMousedown(event,'newBoxName')"></div>
+        </div>
+        <input id="newBoxPrice" type="number" min="0" step="1" placeholder="定価（任意・円）" style="max-width:150px;">
+        <div class="mini-field">
+          <label>発売日（任意）</label>
+          <input id="newBoxReleaseDate" type="date" style="max-width:150px;">
+        </div>
+        <label class="file-btn" id="newBoxImageLabel" for="newBoxImage" title="画面をコピーしてCtrl+V(Mac: ⌘+V)で貼り付けもできます">🖼 画像を選択（必須）</label>
+        <input id="newBoxImage" type="file" accept="image/*" style="display:none" onchange="onNewBoxImageChange()">
+        <span class="file-btn" contenteditable="true" tabindex="-1" spellcheck="false"
+          onpaste="handleNewBoxPaste(event)"
+          onkeydown="if(!(event.ctrlKey||event.metaKey)) event.preventDefault();"
+          oninput="event.target.textContent='';"
+          title="ここを右クリック→貼り付け、またはCtrl+Vで画像を登録できます">📋 右クリックで貼り付け</span>
+        <button class="btn-primary" onclick="addBox()">追加</button>
+      </div>
+      <div class="add-box-hint">BOX名を入力すると、過去の発売実績や発売予定のBOX候補が表示されます（一覧になくても自由に入力できます）。<b>サムネイル画像は必須です</b>（あとで一覧を見返す時の目印になるため）。定価・発売日は任意です。ファイル選択のほか、画面をコピーして右クリック→貼り付け、またはCtrl+V(Mac: ⌘+V)でも登録できます。</div>
+    </div>
+  `;
+
+  if(boxes.length===0){
+    html += `<div class="empty">まだBOXが登録されていません。上のフォームから追加してください。</div>`;
+  } else {
+    html += `
+      <div class="filter-row">
+        <span class="count-badge">登録BOX：${boxes.length}件</span>
+        <span class="spacer"></span>
+        <label style="font-size:11px; color:var(--muted); white-space:nowrap;">並び替え：</label>
+        <select id="boxSortSelect" onchange="changeBoxSort(this.value)">
+          <option value="default" ${state.boxSort==='default'?'selected':''}>登録順</option>
+          <option value="release-desc" ${state.boxSort==='release-desc'?'selected':''}>発売日が新しい順</option>
+          <option value="release-asc" ${state.boxSort==='release-asc'?'selected':''}>発売日が古い順</option>
+        </select>
+      </div>
+    `;
+
+    const sortedBoxes = state.boxSort==='release-desc' ? sortBoxesByRelease(boxes, 'desc')
+      : state.boxSort==='release-asc' ? sortBoxesByRelease(boxes, 'asc')
+      : boxes;
+
+    html += `<div class="box-grid">` + sortedBoxes.map(b=>{
+      const bEntries = data.entries.filter(e=>e.boxId===b.id);
+      const bRate = rateOf(bEntries);
+      const thumbStyle = b.thumbnail ? `background-image:url('${b.thumbnail}')` : '';
+      const glow = bRate===null ? '' : bRate>=60 ? 'var(--gold)' : bRate>=30 ? 'var(--win)' : 'var(--lose)';
+      const cardStyle = glow ? `--card-glow:${glow}` : '';
+      return `
+        <div class="box-card" style="${cardStyle}" onclick="openBox('${b.id}')">
+          <div class="box-thumb" style="${thumbStyle}" contenteditable="true" tabindex="-1" spellcheck="false"
+            onpaste="handleThumbPaste(event, '${b.id}')"
+            onkeydown="if(!(event.ctrlKey||event.metaKey)) event.preventDefault();"
+            oninput="event.target.textContent='';"
+            title="右クリック→貼り付け、またはCtrl+Vで画像を登録できます">
+            ${!b.thumbnail ? `<span class="box-thumb-icon">◆</span>` : ''}
+            <button class="box-thumb-btn" onclick="openThumbPicker('${b.id}', event)" title="クリックでファイル選択、またはこのカードをクリック後にCtrl+Vで貼り付け">${b.thumbnail ? '画像を変更' : '画像を追加/貼付'}</button>
+            <div class="box-name">${escapeHtml(b.name)}${b.releaseDate ? `<div class="box-release">発売日：${b.releaseDate}</div>` : ''}</div>
+          </div>
+          <button class="box-del" onclick="removeBox('${b.id}', event)" title="BOXを削除">✕</button>
+          <div class="box-meta">
+            <span>${bEntries.length}件</span>
+            <span class="box-price">${b.price!=null ? '¥'+b.price.toLocaleString() : '定価未設定'}</span>
+            <span class="box-rate" style="color:${bRate!==null?'var(--win)':'var(--muted)'}">${bRate!==null ? bRate+'%' : '—'}</span>
+          </div>
+        </div>
+      `;
+    }).join('') + `</div>`;
+  }
+
+  document.getElementById('mainArea').innerHTML = html;
+  renderUpBoxNameTags();
+}
+
+function renderBoxDetailView(){
+  const box = data.boxes.find(b=>b.id===state.boxId);
+  if(!box){ goBoxes(); return; }
+
+  const allBoxEntries = data.entries.filter(e=>e.boxId===box.id);
+  const lotteryBoxEntries = allBoxEntries.filter(e=>!isPurchaseType(e));
+  const purchaseBoxEntries = allBoxEntries.filter(e=>isPurchaseType(e));
+  const won = lotteryBoxEntries.filter(e=>e.status==='won').length;
+  const lost = lotteryBoxEntries.filter(e=>e.status==='lost').length;
+  const pending = lotteryBoxEntries.filter(e=>e.status==='pending').length;
+  const rate = rateOf(allBoxEntries);
+  const purchased = purchaseBoxEntries.filter(e=>e.status==='won').length;
+  const notPurchased = purchaseBoxEntries.length - purchased;
+
+  const totalObtained = allBoxEntries.filter(e=>e.status==='won').length; // 抽選当選＋通常購入済みの合計（入手済み数）
+  const soldEntries = allBoxEntries.filter(e=>e.status==='won' && e.resalePrice!=null);
+  const profits = soldEntries.map(e=>entryProfit(e, box)).filter(p=>p!=null);
+  const totalProfit = profits.length ? profits.reduce((a,b)=>a+b,0) : null;
+  const heldCount = totalObtained - soldEntries.length;
+
+  const shopNames = [...new Set(allBoxEntries.map(e=>e.shop))].sort();
+
+  let html = `
+    <div class="back-bar">
+      <button class="back-btn" onclick="goBoxes()"><span class="arrow">←</span>戻る</button>
+    </div>
+    <div class="crumb">
+      <button onclick="goBoxes()">${escapeHtml(state.category)}</button>
+      <span class="sep">›</span>
+      <span class="current">${escapeHtml(box.name)}</span>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card" style="grid-column:1/-1; overflow:visible;">
+        <div class="stat-label">BOX名</div>
+        <div class="stat-value suggest-wrap">
+          <input type="text" id="boxNameEditInput" class="name-edit-input" value="${escapeHtml(box.name)}"
+            oninput="showSuggest('boxNameEditInput','newBoxCandidate')" onfocus="this.select(); showSuggest('boxNameEditInput','newBoxCandidate',true)" onblur="hideSuggestDelayed('boxNameEditInput')"
+            onchange="updateBoxName('${box.id}', this.value)">
+          <div class="suggest-dropdown" id="boxNameEditInput-suggest" onmousedown="handleSuggestMousedown(event,'boxNameEditInput')"></div>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">このBOXの勝率（抽選のみ）</div>
+        <div class="stat-value gold">${rate!==null ? rate+'%' : '—'}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">当選 / 落選</div>
+        <div class="stat-value win">${won}<span style="color:var(--muted);font-size:14px;"> / ${lost}</span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">結果待ち</div>
+        <div class="stat-value">${pending}</div>
+      </div>
+      ${purchaseBoxEntries.length ? `
+      <div class="stat-card">
+        <div class="stat-label">通常購入：購入済み / 未購入</div>
+        <div class="stat-value win">${purchased}<span style="color:var(--muted);font-size:14px;"> / ${notPurchased}</span></div>
+      </div>
+      ` : ''}
+      <div class="stat-card">
+        <div class="stat-label">定価（円・BOX共通）</div>
+        <div class="stat-value"><input type="number" min="0" step="1" class="price-edit-input" value="${box.price!=null ? box.price : ''}" placeholder="未設定" onchange="updateBoxPrice('${box.id}', this.value)"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">発売日</div>
+        <div class="stat-value"><input type="date" class="entry-date-input" style="font-size:15px;" value="${box.releaseDate || ''}" onchange="updateBoxReleaseDate('${box.id}', this.value)"></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累計損益（売却済み${soldEntries.length}個 / 保有${heldCount}個）</div>
+        <div class="stat-value" style="color:${totalProfit===null?'var(--muted)':totalProfit>=0?'var(--win)':'var(--lose)'}">${totalProfit===null ? '—' : (totalProfit>=0?'+':'')+'¥'+totalProfit.toLocaleString()}</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>抽選・購入を登録</h2>
+      <div class="form-grid">
+        <div>
+          <label>ショップ名</label>
+          <div class="suggest-wrap">
+            <input id="inShop" placeholder="例：〇〇カードショップ 渋谷店" autocomplete="off"
+              oninput="showSuggest('inShop','shop')" onfocus="this.select(); showSuggest('inShop','shop',true)" onblur="hideSuggestDelayed('inShop')">
+            <div class="suggest-dropdown" id="inShop-suggest" onmousedown="handleSuggestMousedown(event,'inShop')"></div>
+          </div>
+        </div>
+        <div>
+          <label>種別</label>
+          <select id="inType" onchange="onInTypeChange()">
+            <option value="lottery">抽選</option>
+            <option value="purchase">通常購入</option>
+          </select>
+        </div>
+        <div>
+          <label id="inDateLabel">抽選発表日</label>
+          <input id="inDate" type="datetime-local">
+        </div>
+        <div>
+          <label id="inStatusLabel">当落</label>
+          <select id="inStatus">
+            <option value="pending">未発表</option>
+            <option value="won">当選</option>
+            <option value="lost">落選</option>
+          </select>
+        </div>
+        <div>
+          <label>抽選URL</label>
+          <input id="inUrl" placeholder="https://...">
+        </div>
+        <div class="full">
+          <label>メモ（任意）</label>
+          <input id="inMemo" placeholder="受け取り期限・応募条件など">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" onclick="addEntry()">登録する</button>
+      </div>
+    </div>
+
+
+    <div class="filter-row">
+      <select id="filterShop" onchange="renderEntryList()">
+        <option value="">全ショップ</option>
+        ${shopNames.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('')}
+      </select>
+      <select id="filterType" onchange="renderEntryList()">
+        <option value="">すべての種別</option>
+        <option value="lottery">抽選</option>
+        <option value="purchase">通常購入</option>
+      </select>
+      <select id="filterStatus" onchange="renderEntryList()">
+        <option value="">すべての状態</option>
+        <option value="pending">未発表・未購入</option>
+        <option value="won">当選・購入済み</option>
+        <option value="lost">落選</option>
+      </select>
+      <div class="spacer"></div>
+      <span class="count-badge" id="countBadge"></span>
+    </div>
+
+    <div id="entryListArea"></div>
+  `;
+
+  document.getElementById('mainArea').innerHTML = html;
+  renderEntryList();
+}
+
+function renderEntryList(){
+  const box = data.boxes.find(b=>b.id===state.boxId);
+  if(!box) return;
+  const filterShop = document.getElementById('filterShop').value;
+  const filterType = document.getElementById('filterType').value;
+  const filterStatus = document.getElementById('filterStatus').value;
+
+  let list = data.entries.filter(e=>e.boxId===box.id);
+  if(filterShop) list = list.filter(e=>e.shop===filterShop);
+  if(filterType) list = list.filter(e=> (e.type||'lottery') === filterType);
+  if(filterStatus) list = list.filter(e=>e.status===filterStatus);
+  list.sort((a,b)=> (b.date||'').localeCompare(a.date||''));
+
+  document.getElementById('countBadge').textContent = `${list.length}件`;
+
+  const area = document.getElementById('entryListArea');
+  if(list.length===0){
+    area.innerHTML = '<div class="empty">まだ記録がありません。上のフォームから抽選を登録してください。</div>';
+    return;
+  }
+
+  area.innerHTML = `<div class="card-grid">` + list.map(e=>{
+    const purchaseType = isPurchaseType(e);
+    const profit = e.status==='won' ? entryProfit(e, box) : null;
+    const resaleBlock = e.status==='won' ? `
+      <div class="resale-block">
+        <div class="resale-row">
+          <span>売却価格</span>
+          <input type="number" min="0" step="1" class="entry-date-input" value="${e.resalePrice!=null ? e.resalePrice : ''}" placeholder="未売却" onclick="event.stopPropagation()" onchange="updateEntryResalePrice('${e.id}', this.value)">
+        </div>
+        <div class="resale-row">
+          <span>売却日</span>
+          <input type="date" class="entry-date-input" value="${e.resaleDate || ''}" onclick="event.stopPropagation()" onchange="updateEntryResaleDate('${e.id}', this.value)">
+        </div>
+        ${profit!==null ? `<div class="resale-profit" style="color:${profit>=0?'var(--win)':'var(--lose)'}">損益：${profit>=0?'+':''}¥${profit.toLocaleString()}</div>` : (box.price==null ? `<div class="resale-hint">※定価が未設定です</div>` : '')}
+      </div>
+    ` : '';
+    const actionButtons = purchaseType ? (
+      e.status==='won'
+        ? `<button class="mini-btn" onclick="updateStatus('${e.id}','pending')">未購入に戻す</button>`
+        : `<button class="mini-btn win-btn" onclick="updateStatus('${e.id}','won')">購入済みにする</button>`
+    ) : `
+        <button class="mini-btn win-btn" onclick="updateStatus('${e.id}','won')">当選にする</button>
+        <button class="mini-btn lose-btn" onclick="updateStatus('${e.id}','lost')">落選にする</button>
+        <button class="mini-btn" onclick="updateStatus('${e.id}','pending')">未発表に戻す</button>
+    `;
+    return `
+    <div class="entry">
+      <div class="entry-top">
+        <div class="suggest-wrap" style="flex:1; max-width:75%;">
+          <input type="text" id="entryShop-${e.id}" class="entry-shop-input" style="width:100%; max-width:none;" value="${escapeHtml(e.shop)}"
+            onclick="event.stopPropagation()"
+            oninput="showSuggest('entryShop-${e.id}','shop')" onfocus="this.select(); showSuggest('entryShop-${e.id}','shop',true)" onblur="hideSuggestDelayed('entryShop-${e.id}')"
+            onchange="updateEntryShop('${e.id}', this.value)">
+          <div class="suggest-dropdown" id="entryShop-${e.id}-suggest" onmousedown="event.stopPropagation(); handleSuggestMousedown(event,'entryShop-${e.id}')"></div>
+        </div>
+        <span class="status-tag ${statusClass(e.status, e.type)}">${statusLabel(e.status, e.type)}</span>
+      </div>
+      <div class="entry-top" style="margin-top:-4px;">
+        <select class="type-select ${purchaseType?'type-purchase':'type-lottery'}" onclick="event.stopPropagation()" onchange="updateEntryType('${e.id}', this.value)">
+          <option value="lottery" ${purchaseType?'':'selected'}>抽選</option>
+          <option value="purchase" ${purchaseType?'selected':''}>通常購入</option>
+        </select>
+      </div>
+      <div class="entry-dates">${purchaseType?'購入日':'発表日'}：<input type="datetime-local" class="entry-date-input" value="${e.date || ''}" onclick="event.stopPropagation()" onchange="updateEntryDate('${e.id}', this.value)"></div>
+      ${resaleBlock}
+      <div class="entry-edit-row">
+        <div class="entry-edit-label">${purchaseType?'購入URL':'抽選URL'}（任意）</div>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <input type="text" class="entry-edit-input" placeholder="https://..." value="${escapeHtml(e.url || '')}" onclick="event.stopPropagation()" onchange="updateEntryUrl('${e.id}', this.value)">
+          ${e.url ? `<a href="${escapeHtml(e.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="開く" style="flex:none; color:var(--gold); font-size:13px;">↗</a>` : ''}
+        </div>
+      </div>
+      <div class="entry-edit-row">
+        <div class="entry-edit-label">メモ（任意）</div>
+        <input type="text" class="entry-edit-input" placeholder="受け取り期限・応募条件など" value="${escapeHtml(e.memo || '')}" onclick="event.stopPropagation()" onchange="updateEntryMemo('${e.id}', this.value)">
+      </div>
+      <div class="entry-actions">
+        ${actionButtons}
+        <button class="mini-btn del-btn" onclick="removeEntry('${e.id}')">削除</button>
+      </div>
+    </div>
+  `;
+  }).join('') + `</div>`;
+}
+
+document.addEventListener('paste', async (e)=>{
+  const items = (e.clipboardData || window.clipboardData)?.items;
+  if(!items) return;
+  let imageFile = null;
+  for(const item of items){
+    if(item.type && item.type.startsWith('image/')){
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if(!imageFile) return;
+
+  if(pendingThumbBoxId){
+    e.preventDefault();
+    const box = data.boxes.find(b=>b.id===pendingThumbBoxId);
+    pendingThumbBoxId = null;
+    if(!box) return;
+    try{
+      box.thumbnail = await resizeImageFile(imageFile);
+      save();
+      render();
+    }catch(err){
+      showMessage('画像の貼り付けに失敗しました');
+    }
+  } else if(state.view === 'boxes'){
+    e.preventDefault();
+    newBoxImageFile = imageFile;
+    const label = document.getElementById('newBoxImageLabel');
+    if(label){
+      label.textContent = '🖼 画像貼り付け済み';
+      label.classList.add('has-file');
+    }
+  }
+});
+
+load();
+
+// PWA：Service Workerを登録（sw.jsが同じ場所に無い/使えない環境では何もしない）
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').then((reg)=>{
+      // 新しいsw.jsが見つかったら、自動で最新版に切り替えてリロードする
+      reg.addEventListener('updatefound', ()=>{
+        const newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener('statechange', ()=>{
+          if(newWorker.state === 'activated'){
+            window.location.reload();
+          }
+        });
+      });
+      // ページを開くたびに、新しいsw.jsが無いか確認しにいく
+      reg.update();
+    }).catch(()=>{ /* Claudeのアーティファクト内など、sw.jsが無い環境では何もしない */ });
+  });
+}
+</script>
+</body>
+</html>
